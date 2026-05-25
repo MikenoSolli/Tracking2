@@ -1,0 +1,161 @@
+// ============================================================================
+// VEHICLE FEATURE MANAGEMENT
+// ============================================================================
+
+model vehicle_subscription {
+  id                String              @id @default(cuid())
+  vehicleId         String              @unique @map("vehicle_id")
+  subscriptionType  subscription_type   @map("subscription_type")
+  isActive          Boolean             @default(true) @map("is_active")
+  activatedAt       DateTime            @default(now()) @map("activated_at")
+  expiresAt         DateTime?           @map("expires_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  
+  // Relations
+  vehicle           vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  features          vehicle_feature_config[]
+  
+  @@index([vehicleId, isActive], map: "idx_subscription_vehicle")
+  @@index([subscriptionType, isActive], map: "idx_subscription_type")
+}
+
+model vehicle_feature_config {
+  id                    String                @id @default(cuid())
+  vehicleSubscriptionId String                @map("vehicle_subscription_id")
+  featureType           feature_type          @map("feature_type")
+  isEnabled             Boolean               @default(true) @map("is_enabled")
+  config                Json?                 // Store feature-specific configuration
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+  
+  // Relations
+  vehicleSubscription   vehicle_subscription  @relation(fields: [vehicleSubscriptionId], references: [id], onDelete: Cascade)
+  customSensors         custom_sensor[]
+  
+  @@unique([vehicleSubscriptionId, featureType], map: "unique_subscription_feature")
+  @@index([featureType, isEnabled], map: "idx_feature_type")
+}
+
+model custom_sensor {
+  id                String                  @id @default(cuid())
+  featureConfigId   String                  @map("feature_config_id")
+  vehicleId         String                  @map("vehicle_id")
+  sensorName        String                  @map("sensor_name")
+  sensorType        custom_sensor_type      @map("sensor_type")
+  unit              String?                 // e.g., "°C", "L", "kPa"
+  minValue          Float?                  @map("min_value")
+  maxValue          Float?                  @map("max_value")
+  alertThreshold    Float?                  @map("alert_threshold")
+  alertCondition    alert_condition?        @map("alert_condition")
+  isActive          Boolean                 @default(true) @map("is_active")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  
+  // Relations
+  featureConfig     vehicle_feature_config  @relation(fields: [featureConfigId], references: [id], onDelete: Cascade)
+  vehicle           vehicle                 @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  readings          custom_sensor_reading[]
+  
+  @@index([vehicleId, isActive], map: "idx_custom_sensor_vehicle")
+  @@index([sensorType], map: "idx_sensor_type")
+}
+
+model custom_sensor_reading {
+  id          BigInt        @id @default(autoincrement())
+  sensorId    String        @map("sensor_id")
+  vehicleId   String        @map("vehicle_id")
+  value       Float
+  timestamp   DateTime
+  createdAt   DateTime      @default(now()) @map("created_at")
+  
+  // Relations
+  sensor      custom_sensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  vehicle     vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  
+  @@index([sensorId, timestamp], map: "idx_sensor_reading_time")
+  @@index([vehicleId, timestamp], map: "idx_vehicle_sensor_time")
+}
+
+// ============================================================================
+// USER PREFERENCES & DASHBOARD CONFIG
+// ============================================================================
+
+model user_dashboard_config {
+  id              String    @id @default(cuid())
+  userId          Int       @unique @map("user_id")
+  dashboardLayout Json      @map("dashboard_layout") // Store widget preferences
+  visibleFeatures Json      @map("visible_features") // Which features to show
+  alertPreferences Json     @map("alert_preferences") // Alert filtering preferences
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user            user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model user_feature_visibility {
+  id          String        @id @default(cuid())
+  userId      Int           @map("user_id")
+  vehicleId   String        @map("vehicle_id")
+  featureType feature_type  @map("feature_type")
+  isVisible   Boolean       @default(true) @map("is_visible")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  
+  // Relations
+  user        user          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle     vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, vehicleId, featureType], map: "unique_user_vehicle_feature")
+  @@index([userId], map: "idx_user_feature_visibility")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum subscription_type {
+  BASIC              // Only GPS location
+  STANDARD           // GPS + Basic telemetry (speed, fuel)
+  ADVANCED           // GPS + Full OBD telemetry
+  CUSTOM             // User-defined sensors
+  ENTERPRISE         // Everything + API access
+}
+
+enum feature_type {
+  GPS_TRACKING
+  SPEED_MONITORING
+  FUEL_MONITORING
+  ENGINE_TELEMETRY
+  OBD_DIAGNOSTICS
+  GEOFENCING
+  DRIVER_BEHAVIOR
+  MAINTENANCE_TRACKING
+  CUSTOM_SENSORS
+  TEMPERATURE_MONITORING
+  HUMIDITY_MONITORING
+  CARGO_MONITORING
+  REFRIGERATION
+  TIRE_PRESSURE
+  WEIGHT_SENSOR
+  VIDEO_TELEMATICS
+}
+
+enum custom_sensor_type {
+  TEMPERATURE
+  PRESSURE
+  HUMIDITY
+  WEIGHT
+  VOLUME
+  DISTANCE
+  BINARY          // On/Off sensor
+  COUNTER         // Event counter
+  OTHER
+}
+
+enum alert_condition {
+  ABOVE           // Alert when value > threshold
+  BELOW           // Alert when value < threshold
+  EQUALS          // Alert when value = threshold
+  BETWEEN         // Alert when value in range
+  OUTSIDE         // Alert when value outside range
+}

@@ -1,43 +1,54 @@
 import { NextResponse } from "next/server";
-import { refreshSession, getSession } from "@/app/_lib/sessions";
+import { refreshAccessToken, verifyAccessToken } from "@/app/_lib/sessions";
+import { cookies } from "next/headers";
 
 export async function POST() {
-    try {
-        const session = await getSession();
-        if (!session) {
-            return NextResponse.json({ error: "No session" }, { status: 401 });
-        }
-
-        const refreshed = await refreshSession();
-        if (!refreshed) {
-            return NextResponse.json({ error: "Refresh failed" }, { status: 401 });
-        }
-
-        return NextResponse.json({ 
-            success: true,
-            expiresAt: refreshed.expiresAt 
-        });
-    } catch (error) {
-        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  try {
+    const success = await refreshAccessToken();
+    if (!success) {
+      return NextResponse.json({ error: "Session expired" }, { status: 401 });
     }
+
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("access_token")?.value;
+    const payload = accessToken ? await verifyAccessToken(accessToken) : null;
+
+    return NextResponse.json({
+      success: true,
+      userId: payload ? Number(payload.sub) : null,
+      role: payload?.role,
+      companyId: payload?.companyId,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function GET() {
-    try {
-        const session = await getSession();
-        if (!session) {
-            return NextResponse.json({ valid: false }, { status: 401 });
-        }
+  try {
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("access_token")?.value;
 
-        const expiresAt = session.expiresAt as string;
-        const timeLeft = new Date(expiresAt).getTime() - Date.now();
-
-        return NextResponse.json({ 
-            valid: true,
-            expiresAt,
-            timeLeft, // ms remaining
-        });
-    } catch (error) {
-        return NextResponse.json({ valid: false }, { status: 401 });
+    if (!accessToken) {
+      return NextResponse.json({ valid: false }, { status: 401 });
     }
+
+    const payload = await verifyAccessToken(accessToken);
+    if (!payload) {
+      return NextResponse.json({ valid: false }, { status: 401 });
+    }
+
+    const exp = payload.exp as number;
+    const msLeft = exp * 1000 - Date.now();
+
+    return NextResponse.json({
+      valid: true,
+      userId: Number(payload.sub),
+      role: payload.role,
+      companyId: payload.companyId,
+      msLeft,
+    });
+  } catch (error) {
+    return NextResponse.json({ valid: false }, { status: 401 });
+  }
 }

@@ -3,64 +3,62 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import VehicleDetailClient from "./VehicleDetailClient";
 import { startOfDay } from "date-fns"
-import { late } from "zod/v3";
 
 export default async function VehiclePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-const vehicle = await prisma.vehicle.findUnique({
+  const vehicle = await prisma.vehicle.findUnique({
     where: { id },
     include: {
-      status: {
-        where: { lastUpdate: { gte: startOfDay(new Date()) } },
-        orderBy: { lastUpdate: 'desc' },
-      },
-      maintenance: { orderBy: { nextService: 'desc' }, take: 1 }
+      status: true,
+      maintenance: { orderBy: { scheduledDate: 'desc' }, take: 1 }
     }
   });
 
-  // 1. Only 404 if the vehicle record is missing entirely
   if (!vehicle) {
     notFound();
   }
 
-let statusPool = vehicle.status;
-if (statusPool.length < 10) {
-  vehicle.status = await prisma.status.findMany({
-    where: { vehicleId: id },
-    orderBy: { lastUpdate: 'desc' },
-    take: 20
+  // Fetch GPS history from gps_events table (location history)
+  let gpsHistory = await prisma.gps_events.findMany({
+    where: { vehicleId: id, timestamp: { gte: startOfDay(new Date()) } },
+    orderBy: { timestamp: 'desc' },
+    take: 50
   });
-}
 
-  // 2. Get the latest status, or use a default "Empty" state
-  const latestStatus = vehicle.status[0] || null;
+  // No data today? Fall back to the last 50 data points ever
+  if (gpsHistory.length === 0) {
+    gpsHistory = await prisma.gps_events.findMany({
+      where: { vehicleId: id },
+      orderBy: { timestamp: 'desc' },
+      take: 50
+    });
+  }
+
+  // Get the latest status record (singular relation on vehicle)
+  const latestStatus = vehicle.status;
   const lastMaintenance = vehicle.maintenance[0];
 
-  //VALIDATE STATUS DATA
+  // Validate status data
   let currentstatus = "OFFLINE";
   let latestUpdate = null;
- 
 
+  if (latestStatus?.updatedAt) {
+    latestUpdate = latestStatus.updatedAt;
 
-  latestUpdate = latestStatus.lastUpdate;
+    const now = new Date();
+    const diffInMinutes = (now.getTime() - latestUpdate.getTime()) / (1000 * 60);
 
-  const now = new Date();
-  const diffInMinutes = (now.getTime() - latestUpdate.getTime()) / (1000 * 60);
+    if (diffInMinutes <= 15) {
+      currentstatus = latestStatus.state;
+    }
 
-  if (diffInMinutes <= 15) {
-    currentstatus = latestStatus.state;
+    if (latestUpdate.getDay() !== now.getDay()) {
+      latestUpdate = latestUpdate.toLocaleDateString() + " " + latestUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+      latestUpdate = latestUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
   }
- 
-  if(latestUpdate.getDay() !== now.getDay()){
-    latestUpdate=latestUpdate.toLocaleDateString() + " " + latestUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });  
-  }
-  else{
-    latestUpdate=latestUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-
-  
-  
 
   const formattedVehicle = {
     id: vehicle.id,
@@ -70,23 +68,21 @@ if (statusPool.length < 10) {
     type: vehicle.Type,
     telemetry: {
       fuel: latestStatus?.fuelLevel ?? 0,
-      speed: latestStatus?.lastSpeed ?? 0,
+      speed: latestStatus?.speed ?? 0,
       engineHours: latestStatus?.engineHours ?? 0,
-      // Default to 0,0 or a specific regional center if no GPS data exists
-      lat: latestStatus?.lastLat ?? -1.2921, 
-      lng: latestStatus?.lastLng ?? 36.8219,
+      lat: latestStatus?.latitude ?? -1.2921,
+      lng: latestStatus?.longitude ?? 36.8219,
       lastUpdate: latestUpdate || "No Data",
     },
-    // 3. History will just be an empty array [] if no status exists
-    history: vehicle.status
-      .filter(s => s.lastLat && s.lastLng)
-      .map(s => ({
-        pos: [s.lastLat, s.lastLng] as [number, number],
-        time: latestUpdate || "No Data"
+    history: gpsHistory
+      .filter(g => g.latitude && g.longitude)
+      .map(g => ({
+        pos: [g.latitude, g.longitude] as [number, number],
+        time: g.timestamp.toISOString()
       }))
       .reverse(),
-    daysToService: lastMaintenance?.nextService 
-      ? Math.ceil((lastMaintenance.nextService.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) + " Days"
+    daysToService: lastMaintenance?.nextServiceDate
+      ? Math.ceil((lastMaintenance.nextServiceDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) + " Days"
       : "Pending"
   };
 

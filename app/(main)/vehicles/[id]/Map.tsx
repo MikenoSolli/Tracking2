@@ -23,8 +23,10 @@ function MapController({ activePosition, isPlayback }: { activePosition: [number
 
   useEffect(() => {
     if (isPlayback) {
-      // Smoothly pan to the vehicle's position during playback
       map.panTo(activePosition, { animate: true, duration: 0.8 });
+    } else {
+      // Live tracking — gentle pan so the dot never leaves the viewport
+      map.panTo(activePosition, { animate: true, duration: 0.5 });
     }
   }, [activePosition, isPlayback, map]);
 

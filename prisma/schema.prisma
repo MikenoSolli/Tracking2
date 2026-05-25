@@ -3,154 +3,74 @@ generator client {
   output   = "../app/generated/prisma"
 }
 
+//generator erd {
+//  provider = "prisma-erd-generator"
+//  output   = "./ERD.pdf"
+//}
+
 datasource db {
   provider = "mysql"
 }
 
-model alert {
-  id         String         @id @default(cuid())
-  vehicleId  String
-  type       alert_type
-  severity   alert_severity @default(MEDIUM)
-  message    String
-  isResolved Boolean        @default(false)
-  createdAt  DateTime       @default(now())
-  DriverId   String
-  driver     driver         @relation(fields: [DriverId], references: [id], onDelete: NoAction, map: "Alert_DriverId_fkey")
-  vehicle    vehicle        @relation(fields: [vehicleId], references: [id], onDelete: NoAction, map: "Alert_vehicleId_fkey")
-
-  @@index([DriverId], map: "Alert_DriverId_fkey")
-  @@index([vehicleId], map: "Alert_vehicleId_fkey")
-}
+// ============================================================================
+// COMPANIES & USER MANAGEMENT
+// ============================================================================
 
 model companies {
-  id        Int    @id @default(autoincrement())
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime
-  driver    driver[]
-  users     user[]
-  vehicle   vehicle[]
-}
+  id           Int           @id @default(autoincrement())
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  companyType  company_type  @default(COMPANY) @map("company_type")
+  serviceType  service_type  @default(FLEET) @map("service_type")
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  
+  // Relations
+  users            user[]        @relation("CompanyUsers")
+  drivers          driver[]
+  vehicles         vehicle[]
+  serviceRecords   maintenance[] @relation("ServiceCompany")
+  maintenanceTemplates maintenance_template[] @relation("TemplateCompany")
 
-model dailySummary {
-  id              String   @id @default(cuid())
-  vehicleId       String
-  date            DateTime
-  modeFuelLevel   Float?
-  modeOilPressure Float?
-  modeBattVoltage Float?
-  modeEngineLoad  Float?
-  modeSpeed       Float?
-  modeEngineRPM   Float?
-  modeEngineTemp  Float?
-  totalDistance   Float    @default(0)
-  totalFuelUsed   Float    @default(0)
-  totalEngineHrs  Float    @default(0)
-  IdleTime        Float    @default(0)
-  RunningTime     Float    @default(0)
-  sampleCount     Int      @default(0)
-  updatedAt       DateTime
-  vehicle         vehicle  @relation(fields: [vehicleId], references: [id], onDelete: NoAction, map: "dailySummary_vehicleId_fkey")
-
-  @@unique([vehicleId, date], map: "dailySummary_vehicleId_date_key")
-  @@index([date], map: "dailySummary_date_idx")
-  @@map ("dailysummary")
-}
-
-model driver {
-  id          String     @id @default(cuid())
-  name        String
-  phone       String?
-  licenseNo   String?
-  performance Float      @default(100)
-  licenceExp  DateTime?  @db.Date
-  companyId   Int?
-  alert       alert[]
-  companies   companies? @relation(fields: [companyId], references: [id], onUpdate: NoAction, map: "Driver_companyId_fkey")
-  vehicle     vehicle?
-
-  @@index([companyId], map: "Driver_companyId_fkey")
-}
-
-model maintenance {
-  id          String   @id @default(cuid())
-  vehicleId   String
-  serviceDate DateTime
-  nextService DateTime
-  description String
-  cost        Float?
-  vehicle     vehicle  @relation(fields: [vehicleId], references: [id], onDelete: NoAction, map: "Maintenance_vehicleId_fkey")
-
-  @@index([vehicleId], map: "Maintenance_vehicleId_fkey")
-}
-
-model maintenance_data {
-  id          String   @id @default(cuid())
-  vehicleId   String
-  fuelRate    Float?
-  fuelEff     Float?
-  EngineHours Float?
-  updatedAt   DateTime @default(now())
-  vehicle     vehicle  @relation(fields: [vehicleId], references: [id], onDelete: NoAction, map: "Vehicle_maintenance_data_fkey")
-
-  @@index([vehicleId], map: "Vehicle_maintenance_data_fkey")
-}
-
-model status {
-  id          String       @id @default(cuid())
-  lastLat     Float?
-  lastLng     Float?
-  lastSpeed   Float?       @default(0)
-  state       status_state @default(OFFLINE)
-  fuelLevel   Float?       @default(100)
-  engineHours Float?       @default(0)
-  lastUpdate  DateTime     @default(now())
-  vehicleId   String
-  BattVoltage Float?       @default(0)
-  EngineLoad  Float?       @default(0)
-  OilPressure Float?       @default(0)
-  distance    Float?       @default(0)
-  engineRPM   Int?         @default(2400)
-  engineTemp  Float?       @default(80)
-  fuelUsed    Float?       @default(0)
-  vehicle     vehicle      @relation(fields: [vehicleId], references: [id], onDelete: NoAction, map: "Status_vehicleId_fkey")
-
-  @@index([vehicleId, lastUpdate], map: "idx_status_vehicle_date")
-}
-
-model trip {
-  id        String    @id @default(cuid())
-  vehicleId String
-  startTime DateTime
-  endTime   DateTime?
-  distance  Float     @default(0)
-  fuelUsed  Float     @default(0)
-  startLoc  String?
-  endLoc    String?
-  vehicle   vehicle   @relation(fields: [vehicleId], references: [id], onDelete: NoAction, map: "Trip_vehicleId_fkey")
-
-  @@index([vehicleId], map: "Trip_vehicleId_fkey")
+  @@index([isActive], map: "idx_company_active")
 }
 
 model user {
-  id           Int        @id @default(autoincrement())
-  name         String?
-  email        String     @unique
-  password     String
-  role         users_role @default(USER)
-  created_data DateTime   @default(now())
-  updatedAt    DateTime
-  companyId    Int?
-  companies    companies? @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "User_companyId_fkey")
-  vehicle      vehicle[]
+  id                  Int                @id @default(autoincrement())
+  name                String?
+  email               String             @unique
+  password            String
+  role                users_role         @default(USER)
+  companyId           Int                @map("company_id")
+  isActive            Boolean            @default(false) @map("is_active")
+  verificationToken   String?            @unique @map("verification_token")
+  verifiedAt          DateTime?          @map("verified_at")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  
+  // Relations
+  company             companies          @relation("CompanyUsers", fields: [companyId], references: [id], onDelete: NoAction)
 
-  @@index([companyId], map: "User_companyId_fkey")
-  @@map("users")
+  vehicleAccess       vehicle_access[]
+  maintenanceAssigned maintenance[]      @relation("AssignedMechanic")
+  alertsAcknowledged  alert[]            @relation("AcknowledgedBy")
+  alertsAssigned      alert[]            @relation("AssignedMechanic")
+  faultsCleared       vehicle_faults[]
+  accessGranted       vehicle_access[]   @relation("GrantedBy")
+  auditLogs           audit_log[]
+  driverAssignments   driver_assignment[] @relation("AssignorRelation")
+  sessions            session[]
+
+  @@index([companyId, role], map: "idx_user_company_role")
+  @@index([email], map: "idx_user_email")
 }
+
+// ============================================================================
+// VEHICLE MANAGEMENT
+// ============================================================================
 
 model vehicle {
   id               String             @id @default(cuid())
@@ -158,23 +78,518 @@ model vehicle {
   plateNumber      String?            @unique(map: "Vehicle_plateNumber_key")
   make             String?
   model            String?
+  year             Int?
+  Imei             String?            @unique(map: "Vehicle_Imei_key")
   driverId         String?            @unique(map: "Vehicle_driverId_key")
-  ownerId          Int
   capacity         Int?
-  companyId        Int?
-  Imei             String?
-  alert            alert[]
-  dailysummary     dailySummary[]
+  companyId        Int                @map("company_id")
+  isActive         Boolean            @default(true) @map("is_active")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  
+  // Relations
+  company          companies          @relation(fields: [companyId], references: [id])
+  driver           driver?            @relation(fields: [driverId], references: [id])
+  alerts           alert[]
+  dailySummaries   dailySummary[]
   maintenance      maintenance[]
-  maintenance_data maintenance_data[]
-  status           status[]
-  trip             trip[]
-  companies        companies?         @relation(fields: [companyId], references: [id], onUpdate: NoAction, map: "Vehicle_companyId_fkey")
-  driver           driver?            @relation(fields: [driverId], references: [id], map: "Vehicle_driverId_fkey")
-  users            user              @relation(fields: [ownerId], references: [id], onDelete: NoAction, map: "Vehicle_ownerId_fkey")
+  maintenanceData  maintenance_data[]
+  status           status?
+  trips            trip[]
+  gpsEvents        gps_events[]
+  telemetryData    telemetry_data[]
+  vehicleFaults    vehicle_faults[]
+  vehicleAccess      vehicle_access[]
+  assignments        driver_assignment[]
+  subscription       vehicle_subscription?
+  customSensors         custom_sensor[]
+  customSensorReadings custom_sensor_reading[]
 
-  @@index([companyId], map: "Vehicle_companyId_fkey")
-  @@index([ownerId], map: "Vehicle_ownerId_fkey")
+  @@index([companyId], map: "idx_vehicle_company")
+  @@index([Imei], map: "idx_vehicle_imei")
+  @@index([isActive], map: "idx_vehicle_active")
+}
+
+model driver {
+  id          String     @id @default(cuid())
+  name        String
+  phone       String?
+  licenseNo   String?    @map("license_no")
+  performance Float      @default(100)
+  licenceExp  DateTime?  @db.Date @map("licence_exp")
+  companyId   Int        @map("company_id")
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  
+  // Relations
+  company     companies           @relation(fields: [companyId], references: [id])
+  vehicle     vehicle?
+  alerts      alert[]
+  assignments driver_assignment[] @relation("AssignmentHistory")
+
+  @@index([companyId], map: "idx_driver_company")
+  @@index([isActive], map: "idx_driver_active")
+}
+
+model driver_assignment {
+  id           BigInt   @id @default(autoincrement())
+  driverId     String   @map("driver_id")
+  vehicleId    String   @map("vehicle_id")
+  assignedBy   Int?     @map("assigned_by")
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+  unassignedAt DateTime? @map("unassigned_at")
+  notes        String?
+
+  driver   driver   @relation("AssignmentHistory", fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle  vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  assignor user?    @relation("AssignorRelation", fields: [assignedBy], references: [id], onDelete: SetNull)
+
+  @@index([driverId, assignedAt], map: "idx_assignment_driver")
+  @@index([vehicleId, assignedAt], map: "idx_assignment_vehicle")
+  @@index([driverId, unassignedAt], map: "idx_assignment_driver_active")
+  @@index([vehicleId, unassignedAt], map: "idx_assignment_vehicle_active")
+}
+
+model vehicle_access {
+  id         BigInt       @id @default(autoincrement())
+  vehicleId  String       @map("vehicle_id")
+  userId     Int          @map("user_id")
+  accessType access_type  @default(VIEW_ONLY) @map("access_type")
+  grantedBy  Int          @map("granted_by")
+  grantedAt  DateTime     @default(now()) @map("granted_at")
+  expiresAt  DateTime?    @map("expires_at")
+  isActive   Boolean      @default(true) @map("is_active")
+  
+  // Relations
+  vehicle    vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  user       user         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantor    user         @relation("GrantedBy", fields: [grantedBy], references: [id])
+
+  @@unique([vehicleId, userId], map: "unique_vehicle_user")
+  @@index([userId, isActive], map: "idx_user_access")
+  @@index([vehicleId, isActive], map: "idx_vehicle_access")
+}
+
+// ============================================================================
+// STATUS & TELEMETRY
+// ============================================================================
+
+model status {
+  id          String       @id @default(cuid())
+  vehicleId   String       @unique @map("vehicle_id")
+  
+  // Latest location (source: gps_events)
+  latitude    Float?
+  longitude   Float?
+  speed       Float?       @default(0)
+  course      Float?       @default(0)
+  satellites  Int?         @default(0)
+  altitude    Float?
+  distance    Float?
+  
+  // Latest telemetry (source: telemetry_data)
+  fuelLevel   Float?       @default(100) @map("fuel_level")
+  engineHours Float?       @default(0) @map("engine_hours")
+  engineRPM   Int?         @default(2400) @map("engine_rpm")
+  engineTemp  Float?       @default(80) @map("engine_temp")
+  engineLoad  Float?       @default(0) @map("engine_load")
+  oilPressure Float?       @default(0) @map("oil_pressure")
+  battVoltage Float?       @default(0) @map("batt_voltage")
+  odometer    Float?       @default(0)
+  fuelUsed    Float?       
+  
+  // State
+  state       status_state @default(OFFLINE)
+  
+  // Staleness tracking
+  locationUpdatedAt  DateTime? @map("location_updated_at")
+  telemetryUpdatedAt DateTime? @map("telemetry_updated_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  vehicle     vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([state], map: "idx_status_state")
+}
+
+model gps_events {
+  id               BigInt   @id @default(autoincrement())
+  vehicleId        String   @map("vehicle_id")
+  timestamp        DateTime
+  latitude         Float
+  longitude        Float
+  speed            Float?
+  course           Float?
+  satellites       Int?
+  altitude         Float?
+  eventType        String   @map("event_type")
+  distanceFromLast Float    @default(0) @map("distance_from_last")
+  createdAt        DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  vehicle          vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, timestamp], map: "idx_gps_vehicle_time")
+  @@index([eventType], map: "idx_gps_event_type")
+  @@index([timestamp], map: "idx_gps_timestamp")
+}
+
+model telemetry_data {
+  id              BigInt    @id @default(autoincrement())
+  vehicleId       String    @map("vehicle_id")
+  timestamp       DateTime
+  engineRPM       Int?      @map("engine_rpm")
+  engineTemp      Float?    @map("engine_temp")
+  engineLoad      Float?    @map("engine_load")
+  engineHours     Float?    @map("engine_hours")
+  fuelLevel       Float?    @map("fuel_level")
+  fuelUsed        Float?    @map("fuel_used")
+  oilPressure     Float?    @map("oil_pressure")
+  batteryVoltage  Float?    @map("battery_voltage")
+  odometer        Float?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  vehicle         vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, timestamp], map: "idx_telemetry_vehicle_time")
+  @@index([timestamp], map: "idx_telemetry_timestamp")
+}
+
+// ============================================================================
+// MAINTENANCE & FAULTS
+// ============================================================================
+
+model maintenance_template {
+  id                  String              @id @default(cuid())
+  companyId           Int                 @map("company_id")
+  name                String
+  description         String?
+  vehicleType         vehicle_Type?       @map("vehicle_type")
+  timeIntervalDays    Int?                @map("time_interval_days")
+  mileageIntervalKm   Float?              @map("mileage_interval_km")
+  engineHoursInterval Float?              @map("engine_hours_interval")
+  defaultSeverity     maintenance_severity @default(MEDIUM) @map("default_severity")
+  estimatedCost       Float?              @map("estimated_cost")
+  estimatedDuration   Float?              @map("estimated_duration")
+  isActive            Boolean             @default(true) @map("is_active")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  company             companies           @relation("TemplateCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  workOrders          maintenance[]       @relation("TemplateWorkOrders")
+
+  @@index([companyId, isActive], map: "idx_template_company")
+  @@index([vehicleType], map: "idx_template_vehicle_type")
+  @@map("maintenance_templates")
+}
+
+model maintenance {
+  id                  String              @id @default(cuid())
+  vehicleId           String              @map("vehicle_id")
+  mechanicId          Int?                @map("mechanic_id")
+  serviceCompanyId    Int?                @map("service_company_id")
+  templateId          String?             @map("template_id")
+  serviceDate         DateTime            @map("service_date")
+  scheduledDate       DateTime            @map("scheduled_date")
+  nextServiceDate     DateTime?           @map("next_service_date")
+  description         String
+  cost                Float?
+  status              maintenance_status  @default(SCHEDULED)
+  severity            maintenance_severity @default(MEDIUM)
+  origin              maintenance_origin  @default(MANUAL)
+  notes               String?             @db.Text
+  metadata            Json?
+  completedAt         DateTime?           @map("completed_at")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  
+  // Relations
+  vehicle             vehicle             @relation(fields: [vehicleId], references: [id], onDelete: NoAction)
+  mechanic            user?               @relation("AssignedMechanic", fields: [mechanicId], references: [id])
+  serviceCompany      companies?          @relation("ServiceCompany", fields: [serviceCompanyId], references: [id], onDelete: SetNull)
+  template            maintenance_template? @relation("TemplateWorkOrders", fields: [templateId], references: [id], onDelete: SetNull)
+  alerts              alert[]             @relation("MaintenanceAlerts")
+  faults              vehicle_faults[]
+
+  @@index([vehicleId, status], map: "idx_maintenance_vehicle_status")
+  @@index([mechanicId, status], map: "idx_maintenance_mechanic")
+  @@index([serviceCompanyId], map: "idx_maintenance_service_company")
+  @@index([scheduledDate], map: "idx_maintenance_scheduled")
+  @@index([vehicleId, scheduledDate, status], map: "idx_maintenance_vehicle_schedule")
+  @@index([templateId], map: "idx_maintenance_template")
+  @@index([origin], map: "idx_maintenance_origin")
+}
+
+model maintenance_data {
+  id          String   @id @default(cuid())
+  vehicleId   String   @map("vehicle_id")
+  fuelRate    Float?   @map("fuel_rate")
+  fuelEff     Float?   @map("fuel_eff")
+  engineHours Float?   @map("engine_hours")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+  
+  // Relations
+  vehicle     vehicle  @relation(fields: [vehicleId], references: [id], onDelete: NoAction)
+
+  @@index([vehicleId], map: "idx_maintenance_data_vehicle")
+}
+
+model vehicle_faults {
+  id            BigInt         @id @default(autoincrement())
+  vehicleId     String         @map("vehicle_id")
+  maintenanceId String?        @map("maintenance_id")
+  faultCode     String         @map("fault_code") @db.VarChar(10)
+  description   String?        @db.Text
+  severity      fault_severity @default(MEDIUM)
+  detectedAt    DateTime       @map("detected_at")
+  clearedAt     DateTime?      @map("cleared_at")
+  clearedBy     Int?           @map("cleared_by")
+  isActive      Boolean        @default(true) @map("is_active")
+  
+  // Relations
+  vehicle         vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  maintenance     maintenance?         @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
+  clearedByUser   user?                @relation(fields: [clearedBy], references: [id])
+  faultDefinition fault_code_definitions? @relation(fields: [faultCode], references: [code])
+  alerts          alert[]              @relation("FaultAlerts")
+
+  @@index([vehicleId, isActive, detectedAt], map: "idx_faults_vehicle_active")
+  @@index([faultCode], map: "idx_fault_code")
+  @@index([isActive, severity], map: "idx_active_faults")
+  @@index([maintenanceId], map: "idx_faults_maintenance")
+  @@index([faultCode, isActive], map: "idx_fault_code_active")
+}
+
+model fault_code_definitions {
+  code              String         @id @db.VarChar(10)
+  description       String         @db.Text
+  systemType        fault_system   @map("system_type")
+  severity          fault_severity @default(MEDIUM)
+  recommendedAction String?        @db.Text @map("recommended_action")
+
+  faults vehicle_faults[]
+
+  @@index([systemType], map: "idx_system_type")
+}
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+model alert {
+  id                    String           @id @default(cuid())
+  vehicleId             String           @map("vehicle_id")
+  DriverId              String?          @map("driver_id")
+  type                  alert_type
+  severity              alert_severity   @default(MEDIUM)
+  message               String
+  alertCategory         alert_category   @default(OTHER) @map("alert_category")
+  isMaintenanceRelated  Boolean          @default(false) @map("is_maintenance_related")
+  assignedMechanicId    Int?             @map("assigned_mechanic_id")
+  maintenanceId         String?          @map("maintenance_id")
+  faultId               BigInt?          @map("fault_id")
+  acknowledgedAt        DateTime?        @map("acknowledged_at")
+  acknowledgedBy        Int?             @map("acknowledged_by")
+  resolvedAt            DateTime?        @map("resolved_at")
+  isResolved            Boolean          @default(false) @map("is_resolved")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  
+  // Relations
+  driver                driver?          @relation(fields: [DriverId], references: [id], onDelete: SetNull)
+  vehicle               vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  assignedMechanic      user?            @relation("AssignedMechanic", fields: [assignedMechanicId], references: [id])
+  maintenance           maintenance?     @relation("MaintenanceAlerts", fields: [maintenanceId], references: [id], onDelete: SetNull)
+  fault                 vehicle_faults?  @relation("FaultAlerts", fields: [faultId], references: [id], onDelete: SetNull)
+  acknowledgedByUser    user?            @relation("AcknowledgedBy", fields: [acknowledgedBy], references: [id])
+
+  @@index([DriverId], map: "idx_alert_driver")
+  @@index([vehicleId], map: "idx_alert_vehicle")
+  @@index([isMaintenanceRelated, vehicleId, createdAt], map: "idx_alert_maintenance")
+  @@index([assignedMechanicId, acknowledgedAt], map: "idx_alert_mechanic")
+  @@index([isResolved, severity], map: "idx_alert_unresolved")
+  @@index([maintenanceId], map: "idx_alert_maintenance_id")
+  @@index([faultId], map: "idx_alert_fault_id")
+  @@index([vehicleId, isResolved, createdAt], map: "idx_alert_vehicle_unresolved")
+}
+
+// ============================================================================
+// TRIPS & SUMMARIES
+// ============================================================================
+
+model trip {
+  id        String    @id @default(cuid())
+  vehicleId String    @map("vehicle_id")
+  startTime DateTime  @map("start_time")
+  endTime   DateTime? @map("end_time")
+  distance  Float     @default(0)
+  fuelUsed  Float     @default(0) @map("fuel_used")
+  startLoc  String?   @map("start_loc")
+  endLoc    String?   @map("end_loc")
+  
+  // Relations
+  vehicle   vehicle   @relation(fields: [vehicleId], references: [id], onDelete: NoAction)
+
+  @@index([vehicleId, startTime], map: "idx_trip_vehicle_time")
+}
+
+model dailySummary {
+  id              String   @id @default(cuid())
+  vehicleId       String   @map("vehicle_id")
+  date            DateTime @db.Date
+  modeFuelLevel   Float?   @map("mode_fuel_level")
+  modeOilPressure Float?   @map("mode_oil_pressure")
+  modeBattVoltage Float?   @map("mode_batt_voltage")
+  modeEngineLoad  Float?   @map("mode_engine_load")
+  modeSpeed       Float?   @map("mode_speed")
+  modeEngineRPM   Float?   @map("mode_engine_rpm")
+  modeEngineTemp  Float?   @map("mode_engine_temp")
+  totalDistance   Float    @default(0) @map("total_distance")
+  totalFuelUsed   Float    @default(0) @map("total_fuel_used")
+  totalEngineHrs  Float    @default(0) @map("total_engine_hrs")
+  idleTime        Float    @default(0) @map("idle_time")
+  runningTime     Float    @default(0) @map("running_time")
+  sampleCount     Int      @default(0) @map("sample_count")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  vehicle         vehicle  @relation(fields: [vehicleId], references: [id], onDelete: NoAction)
+
+  @@unique([vehicleId, date], map: "unique_vehicle_date")
+  @@index([date], map: "idx_daily_summary_date")
+}
+
+// ============================================================================
+// AUDIT LOG
+// ============================================================================
+
+model audit_log {
+  id         BigInt   @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  action     String   @db.VarChar(50)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String   @map("entity_id") @db.VarChar(50)
+  oldValue   String?  @map("old_value") @db.Text
+  newValue   String?  @map("new_value") @db.Text
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  timestamp  DateTime @default(now())
+
+  // Relations
+  user       user     @relation(fields: [userId], references: [id])
+
+  @@index([userId, timestamp], map: "idx_audit_user")
+  @@index([entityType, entityId, timestamp], map: "idx_audit_entity")
+  @@index([action, timestamp], map: "idx_audit_action")
+}
+
+// ============================================================================
+// VEHICLE FEATURE MANAGEMENT (from later.prisma template)
+// ============================================================================
+
+model vehicle_subscription {
+  id                String              @id @default(cuid())
+  vehicleId         String              @unique @map("vehicle_id")
+  subscriptionType  subscription_type   @map("subscription_type")
+  isActive          Boolean             @default(true) @map("is_active")
+  activatedAt       DateTime            @default(now()) @map("activated_at")
+  expiresAt         DateTime?           @map("expires_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  vehicle           vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  features          vehicle_feature_config[]
+
+  @@index([vehicleId, isActive], map: "idx_subscription_vehicle")
+  @@index([subscriptionType, isActive], map: "idx_subscription_type")
+}
+
+model vehicle_feature_config {
+  id                    String                @id @default(cuid())
+  vehicleSubscriptionId String                @map("vehicle_subscription_id")
+  featureType           feature_type          @map("feature_type")
+  isEnabled             Boolean               @default(true) @map("is_enabled")
+  config                Json?                 // Store feature-specific configuration
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+
+  // Relations
+  vehicleSubscription   vehicle_subscription  @relation(fields: [vehicleSubscriptionId], references: [id], onDelete: Cascade)
+  customSensors         custom_sensor[]
+
+  @@unique([vehicleSubscriptionId, featureType], map: "unique_subscription_feature")
+  @@index([featureType, isEnabled], map: "idx_feature_type")
+}
+
+model custom_sensor {
+  id                String                  @id @default(cuid())
+  featureConfigId   String                  @map("feature_config_id")
+  vehicleId         String                  @map("vehicle_id")
+  sensorName        String                  @map("sensor_name")
+  sensorType        custom_sensor_type      @map("sensor_type")
+  unit              String?                 // e.g., "°C", "L", "kPa"
+  minValue          Float?                  @map("min_value")
+  maxValue          Float?                  @map("max_value")
+  alertThreshold    Float?                  @map("alert_threshold")
+  alertCondition    alert_condition?        @map("alert_condition")
+  isActive          Boolean                 @default(true) @map("is_active")
+  createdAt         DateTime                @default(now()) @map("created_at")
+
+  // Relations
+  featureConfig     vehicle_feature_config  @relation(fields: [featureConfigId], references: [id], onDelete: Cascade)
+  vehicle           vehicle                 @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  readings          custom_sensor_reading[]
+
+  @@index([vehicleId, isActive], map: "idx_custom_sensor_vehicle")
+  @@index([sensorType], map: "idx_sensor_type")
+}
+
+model custom_sensor_reading {
+  id          BigInt        @id @default(autoincrement())
+  sensorId    String        @map("sensor_id")
+  vehicleId   String        @map("vehicle_id")
+  value       Float
+  timestamp   DateTime
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  sensor      custom_sensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  vehicle     vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([sensorId, timestamp], map: "idx_sensor_reading_time")
+  @@index([vehicleId, timestamp], map: "idx_vehicle_sensor_time")
+}
+
+model session {
+  id           String   @id @default(cuid())
+  userId       Int      @map("user_id")
+  tokenHash    String   @unique @map("token_hash")
+  userAgent    String?  @map("user_agent")
+  ipAddress    String?  @map("ip_address")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_session_user")
+  @@index([expiresAt], map: "idx_session_expires")
+  @@index([tokenHash], map: "idx_session_token")
+  @@map("sessions")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum company_type {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum service_type{
+  FLEET
+  MECHANIC
 }
 
 enum vehicle_Type {
@@ -183,21 +598,68 @@ enum vehicle_Type {
   CAR
   BUS
   MOTORCYCLE
+  VAN
+  PICKUP
 }
 
-enum alert_type {
-  SPEEDING
-  GEOFENCE_EXIT
-  LOW_FUEL
-  MAINTENANCE_DUE
-  FAULT
-  STOP
+enum subscription_type {
+  BASIC              // Only GPS location
+  STANDARD           // GPS + Basic telemetry (speed, fuel)
+  ADVANCED           // GPS + Full OBD telemetry
+  CUSTOM             // User-defined sensors
+  ENTERPRISE         // Everything + API access
 }
 
-enum alert_severity {
-  LOW
-  MEDIUM
-  HIGH
+enum feature_type {
+  GPS_TRACKING
+  SPEED_MONITORING
+  FUEL_MONITORING
+  ENGINE_TELEMETRY
+  OBD_DIAGNOSTICS
+  GEOFENCING
+  DRIVER_BEHAVIOR
+  MAINTENANCE_TRACKING
+  CUSTOM_SENSORS
+  TEMPERATURE_MONITORING
+  HUMIDITY_MONITORING
+  CARGO_MONITORING
+  REFRIGERATION
+  TIRE_PRESSURE
+  WEIGHT_SENSOR
+  VIDEO_TELEMATICS
+}
+
+enum custom_sensor_type {
+  TEMPERATURE
+  PRESSURE
+  HUMIDITY
+  WEIGHT
+  VOLUME
+  DISTANCE
+  BINARY          // On/Off sensor
+  COUNTER         // Event counter
+  OTHER
+}
+
+enum alert_condition {
+  ABOVE           // Alert when value > threshold
+  BELOW           // Alert when value < threshold
+  EQUALS          // Alert when value = threshold
+  BETWEEN         // Alert when value in range
+  OUTSIDE         // Alert when value outside range
+}
+
+enum users_role {
+  USER
+  ADMIN
+  MECHANIC
+  OWNER
+}
+
+enum access_type {
+  FULL
+  MAINTENANCE_ONLY
+  VIEW_ONLY
 }
 
 enum status_state {
@@ -206,7 +668,82 @@ enum status_state {
   OFFLINE
 }
 
-enum users_role {
-  USER
-  ADMIN
+enum maintenance_status {
+  SCHEDULED
+  ASSIGNED
+  IN_PROGRESS
+  PENDING_PARTS
+  ON_HOLD
+  COMPLETED
+  APPROVED
+  CANCELLED
+  ESCALATED
+}
+
+enum maintenance_origin {
+  INTERVAL
+  FAULT
+  MANUAL
+  DRIVER
+}
+
+enum maintenance_severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum fault_severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum fault_system {
+  ENGINE
+  TRANSMISSION
+  ABS
+  AIRBAG
+  EMISSION
+  ELECTRICAL
+  FUEL
+  COOLING
+  OTHER
+}
+
+enum alert_type {
+  SPEEDING
+  GEOFENCE_EXIT
+  GEOFENCE_ENTER
+  LOW_FUEL
+  MAINTENANCE_DUE
+  FAULT
+  STOP
+  HARSH_BRAKING
+  HARSH_ACCELERATION
+  OVERSPEED
+  ENGINE_OVERHEAT
+  LOW_BATTERY
+  MECHANICAL_FAULT
+}
+
+enum alert_severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum alert_category {
+  GEOFENCE
+  SPEED
+  MAINTENANCE
+  MECHANICAL
+  FUEL
+  BATTERY
+  ENGINE
+  SECURITY
+  OTHER
 }

@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { 
+import {
   Fuel, Gauge, Battery, ArrowLeft, Calendar as CalendarIcon, PlayCircle, XCircle,
-  ShieldCheck, Navigation, History, Info, ChevronLeft, ChevronRight , Loader2,Play, Pause, RotateCcw
+  ShieldCheck, Navigation, History, Info, ChevronLeft, ChevronRight , Loader2,Play, Pause, RotateCcw,
+  SkipBack, SkipForward
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import Link from "next/link";
@@ -57,6 +58,23 @@ export default function VehicleDetailClient({ vehicle }: VehicleProps) {
   const [isLoading, setIsLoading] = useState(false);
   const hasInitialized = useRef(false);
 
+  // Redis live data state
+  const [liveData, setLiveData] = useState<{
+    state: string | null;
+    lat: number;
+    lng: number;
+    speed: number | null;
+    fuel: number | null;
+    engineHours: number | null;
+    timestamp: string | null;
+  } | null>(null);
+
+  // Accumulated live trail — seeded from SSR history, extended with each live ping
+  const [liveTrail, setLiveTrail] = useState<{ pos: [number, number]; time: string }[]>(vehicle.history);
+
+  // Ref to avoid duplicate consecutive positions
+  const lastLivePosRef = useRef<[number, number] | null>(null);
+
   const [playbackEnabled, setPlaybackEnabled] = useState(false);
   const [playbackIndex, setPlaybackIndex] = useState<number>(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -87,6 +105,75 @@ if (!hasInitialized.current) {
     hasInitialized.current = true;
   }
 });
+  // SSE connection to Redis live data — also accumulates the live trail
+  useEffect(() => {
+    if (activeTab !== "live") {
+      setLiveData(null);
+      setLiveTrail(vehicle.history);   // Reset trail to SSR baseline
+      lastLivePosRef.current = null;   // Reset dedup ref
+      return;
+    }
+
+    const eventSource = new EventSource(`/api/vehicles/${vehicle.id}/live`);
+
+    eventSource.addEventListener('live', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setLiveData(prev => {
+          // OFFLINE events may skip location — preserve the previous position
+          const hasLocation = data.lat != null && data.lng != null;
+          if (prev && !hasLocation && data.state === prev.state) {
+            return prev;
+          }
+          return {
+            state: data.state ?? null,
+            lat: hasLocation ? data.lat : (prev?.lat ?? null),
+            lng: hasLocation ? data.lng : (prev?.lng ?? null),
+            speed: data.speed ?? null,
+            fuel: data.fuel ?? null,
+            engineHours: data.engineHours ?? null,
+            timestamp: data.timestamp ?? null,
+          };
+        });
+
+        // // SignificantTurn — refetch GPS trail from database to reload the path
+        // if (data.event === 'SignificantTurn') {
+        //   const now = new Date();
+        //   const todayStart = new Date(now);
+        //   todayStart.setHours(0, 0, 0, 0);
+        //   const from = todayStart.toISOString();
+        //   const to = now.toISOString();
+        //
+        //   fetch(`/api/vehicles/${vehicle.id}/history?from=${from}&to=${to}`)
+        //     .then(r => r.json())
+        //     .then((points: any[]) => {
+        //       setLiveTrail(points.filter((p: any) => p.pos));
+        //     })
+        //     .catch(() => {});
+        //   return;
+        // }
+
+        // Regular live ping — append to trail (skip if position hasn't changed)
+        if (data.lat != null && data.lng != null) {
+          const newPos: [number, number] = [data.lat, data.lng];
+          const last = lastLivePosRef.current;
+          if (!last || last[0] !== newPos[0] || last[1] !== newPos[1]) {
+            lastLivePosRef.current = newPos;
+            setLiveTrail(prev => {
+              // Limit trail to 500 points to avoid memory bloat
+              const next = [...prev, { pos: newPos, time: data.timestamp || new Date().toISOString() }];
+              return next.length > 500 ? next.slice(next.length - 500) : next;
+            });
+          }
+        }
+      } catch {}
+    });
+
+    return () => {
+      eventSource.close();
+    };
+  }, [activeTab, vehicle.id, vehicle.history]);
+
   const interpolate = (p1: [number, number], p2: [number, number], t: number): [number, number] => {
     return [
       p1[0] + (p2[0] - p1[0]) * t,
@@ -130,7 +217,7 @@ const handleDateSelect = (range: DateRange | undefined) => {
     }
   };
 
-  const mapHistory = activeTab === "live" ? vehicle.history : historyData;
+  const mapHistory = activeTab === "live" ? liveTrail : historyData;
 
 const animate = (time: number) => {
   if (lastTimeRef.current !== undefined && isPlaying) {
@@ -168,7 +255,43 @@ useEffect(() => {
   }, [isPlaying, playbackIndex]);
 
 
-  const finalPos = playbackEnabled ? (smoothPos || mapHistory[playbackIndex]?.pos) : [vehicle.telemetry.lat, vehicle.telemetry.lng];
+  // Live status from Redis state field — falls back to SSR status when no live data
+  const displayStatus = (liveData?.state || vehicle.status) as DeviceStatus;
+
+  // Use live Redis data for position when available (only when not in playback)
+  const currentPos: [number, number] = liveData?.lat != null && liveData?.lng != null
+    ? [liveData.lat, liveData.lng]
+    : [vehicle.telemetry.lat, vehicle.telemetry.lng];
+
+  const currentFuel = liveData?.fuel ?? vehicle.telemetry.fuel;
+  const currentSpeed = liveData?.speed ?? vehicle.telemetry.speed;
+  const currentEngineHours = liveData?.engineHours ?? vehicle.telemetry.engineHours;
+  const lastUpdate = liveData?.timestamp
+    ? new Date(liveData.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : vehicle.telemetry.lastUpdate;
+
+  const finalPos = playbackEnabled ? (smoothPos || mapHistory[playbackIndex]?.pos) : currentPos;
+
+  const fmtTime = (iso: string) => {
+    try { return format(new Date(iso), 'HH:mm:ss'); } catch { return iso; }
+  };
+
+  const handlePlayPause = () => {
+    if (playbackIndex >= mapHistory.length - 1) {
+      setPlaybackIndex(0);
+      progressRef.current = 0;
+      setSmoothPos(null);
+    }
+    setIsPlaying(p => !p);
+  };
+
+  const skip = (dir: -1 | 1) => {
+    const next = Math.max(0, Math.min(mapHistory.length - 1, playbackIndex + dir));
+    setPlaybackIndex(next);
+    setIsPlaying(false);
+    setSmoothPos(null);
+    progressRef.current = 0;
+  };
 
   return (
     <div className="relative h-[calc(100vh-64px)] w-full overflow-hidden bg-slate-50">
@@ -182,9 +305,16 @@ useEffect(() => {
             </Button>
           </Link>
           <div className="bg-white px-4 py-2 rounded-xl shadow-md border border-slate-200">
-            {/* USE LIVE DATA HERE */}
             <Link href={`/reports/${vehicle.type.toLowerCase()+'s'}/${vehicle.id}`}>
-            <h1 className="font-bold text-slate-900">{vehicle.name}</h1>
+            <h1 className="font-bold text-slate-900 flex items-center gap-2">
+              {vehicle.name}
+              {liveData && (
+                <span className="text-[9px] font-mono tracking-widest text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="animate-pulse h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
+                  LIVE
+                </span>
+              )}
+            </h1>
             <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">{vehicle.plate}</p>
             </Link>
           </div>
@@ -241,102 +371,137 @@ useEffect(() => {
     </div>
       </div>
 
-      {/* 1. PLAYBACK TOGGLE BUTTON */}
-      <div className={cn(
-        "absolute z-1001 transition-all duration-300",
-        // Small screens: Move up (bottom-32) to clear the controller and center slightly
-        // Large screens: Stay in the corner (bottom-6 left-6)
-        playbackEnabled 
-          ? "bottom-32 left-6 md:bottom-6 md:left-6" 
-          : "bottom-6 left-6"
-      )}>
-        <Button 
-          onClick={() => setPlaybackEnabled(!playbackEnabled)}
-          className={cn(
-            "h-10 md:h-12 rounded-full shadow-2xl transition-all gap-2 px-4 border-none",
-            playbackEnabled 
-              ? "bg-red-500 hover:bg-red-600 text-white scale-90 md:scale-100" 
-              : "bg-white hover:bg-slate-50 text-slate-900"
-          )}
-        >
-          {playbackEnabled ? (
-            <>
-              <XCircle className="h-4 w-4 md:h-5 md:w-5" /> 
-              <span className="text-xs md:text-sm">Exit Playback</span>
-            </>
-          ) : (
-            <>
-              <PlayCircle className="h-5 w-5 text-green-600" /> 
-              <span className="font-bold">Playback Mode</span>
-            </>
-          )}
-        </Button>
-      </div>
+      {/* 1. PLAYBACK TOGGLE BUTTON (entry only — exit is inside the controller) */}
+      {!playbackEnabled && (
+        <div className="absolute bottom-6 left-6 z-1001">
+          <Button
+            onClick={() => setPlaybackEnabled(true)}
+            className="h-10 md:h-12 rounded-full shadow-2xl gap-2 px-4 border-none bg-white hover:bg-slate-50 text-slate-900"
+          >
+            <PlayCircle className="h-5 w-5 text-green-600" />
+            <span className="font-bold text-xs md:text-sm">Playback Mode</span>
+          </Button>
+        </div>
+      )}
 
       {/* 2. PLAYBACK CONTROLLER (Center Bottom) */}
       {playbackEnabled && mapHistory.length > 0 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-1000 w-[90%] max-w-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <Card className="p-4 bg-slate-900/95 backdrop-blur-md border-none shadow-2xl text-white rounded-[24px]">
-            <div className="flex items-center gap-4">
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                className="h-10 w-10 rounded-full hover:bg-white/10 text-white shrink-0"
-                onClick={() => setIsPlaying(!isPlaying)}
-              >
-                {isPlaying ? <Pause className="fill-white h-5 w-5" /> : <Play className="fill-white h-5 w-5 ml-1" />}
-              </Button>
-              
-              <div className="flex-1 space-y-2">
-                <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  <span>{activeTab === "live" ? "Live Trail Replay" : "Historical Replay"}</span>
-                  <span className="text-green-400 font-mono">{mapHistory[playbackIndex]?.time}</span>
-                </div>
-                <Slider 
-                value={[playbackIndex]} 
-                max={mapHistory.length - 1} 
-                step={1} 
-                onValueChange={(val) => {
-                  setPlaybackIndex(val[0]);
-                  setIsPlaying(false);
-                  setSmoothPos(null);      // Clear current interpolation
-                  progressRef.current = 0; // Start fresh at the new point
-                }}
-                className="py-2"
-              />
-           </div>
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-1000 w-[calc(100%-32px)] max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <Card className="p-3 bg-slate-900/95 backdrop-blur-md border-none shadow-2xl text-white rounded-[20px]">
+                       {/* Single row: label + position + controls + close */}
+            <div className="flex items-center justify-between mt-1 mb-1.5 px-1">
+              {/* Left: Label + Time */}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                  {activeTab === "live" ? "Replay" : "History"}
+                </span>
+                <span className="text-[9px] sm:text-[10px] font-mono text-green-400 truncate">
+                  {fmtTime(mapHistory[playbackIndex]?.time)}
+                </span>
+              </div>
 
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                className="h-10 w-10 text-slate-400 hover:text-white"
-                onClick={() => {setPlaybackIndex(0); setIsPlaying(false);}}
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
+              {/* Center: Playback Controls */}
+              <div className="flex items-center justify-center gap-0.5">
+                <button
+                  onClick={() => skip(-1)}
+                  title="Skip backward"
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <SkipBack className="h-3 w-3" />
+                </button>
 
-              <Button 
-                  variant="ghost" 
-                  className="text-[10px] font-bold w-10 h-10 rounded-full"
+                <button
+                  onClick={handlePlayPause}
+                  title={isPlaying ? "Pause" : "Play"}
+                  className="h-8 w-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                >
+                  {isPlaying
+                    ? <Pause className="fill-white h-3.5 w-3.5" />
+                    : <Play className="fill-white h-3.5 w-3.5 ml-0.5" />
+                  }
+                </button>
+
+                <button
+                  onClick={() => skip(1)}
+                  title="Skip forward"
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <SkipForward className="h-3 w-3" />
+                </button>
+
+                <div className="w-px h-4 bg-slate-700 mx-1.5" />
+
+                <button
                   onClick={() => setPlaybackSpeed(s => s === 8 ? 1 : s * 2)}
+                  title="Change speed"
+                  className="h-6 px-1.5 rounded-md text-[10px] font-bold font-mono text-green-400 bg-green-500/10 hover:bg-green-500/20 transition-colors"
                 >
                   {playbackSpeed}x
-            </Button>
+                </button>
+
+                <div className="w-px h-4 bg-slate-700 mx-1.5" />
+
+                <button
+                  onClick={() => { setPlaybackIndex(0); setIsPlaying(false); setSmoothPos(null); progressRef.current = 0; }}
+                  title="Restart"
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </div>
+
+              {/* Right: Position + Close */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[9px] sm:text-[10px] text-slate-500 font-mono">
+                  {playbackIndex + 1}/{mapHistory.length}
+                </span>
+                <button
+                  onClick={() => setPlaybackEnabled(false)}
+                  title="Exit playback"
+                  className="text-slate-500 hover:text-white transition-colors"
+                >
+                  <XCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                </button>
+              </div>
             </div>
+           
+           
+            {/* Slider */}
+            <Slider
+              value={[playbackIndex]}
+              max={mapHistory.length - 1}
+              step={1}
+              onValueChange={(val) => {
+                setPlaybackIndex(val[0]);
+                setIsPlaying(false);
+                setSmoothPos(null);
+                progressRef.current = 0;
+              }}
+              className="py-0.5"
+            />
+
           </Card>
         </div>
+      )}
+
+      {/* Backdrop on mobile when stats are visible */}
+      {showStats && (
+        <div
+          className="fixed inset-0 z-30 md:hidden"
+          onClick={() => setShowStats(false)}
+        />
       )}
 
       {/* LEFT SIDE DATA OVERLAY */}
       {/* <div className={cn(`absolute top-24 left-4 z-1000 w-72 space-y-4 transition-all duration-300 transform 
         ${showStats ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 md:translate-x-0 md:opacity-100'}`)}>
          */}
-        <div 
+        <div
           className={cn(
-          "absolute top-24 left-4 z-40 w-72 transition-all duration-500 ease-in-out",
-          showStats 
+          "absolute top-24 left-4 z-40 w-64 sm:w-72 max-h-[calc(100dvh-140px)] overflow-y-auto md:max-h-none md:overflow-y-visible transition-all duration-500 ease-in-out",
+          showStats
             ? "translate-x-0 opacity-90" // TRUE: Show the panel
-            : "-translate-x-[calc(100%+16px)] md:-translate-x-[calc(100%-12px)] opacity-0 md:opacity-50" // FALSE: Hide/Peek
+            : "-translate-x-[calc(100%+16px)] md:-translate-x-[calc(100%-16px)] opacity-0 md:opacity-50" // FALSE: Hide/Peek
         )}>
 
           <Button 
@@ -354,12 +519,16 @@ useEffect(() => {
         <div className={`${!showStats ? 'md:block hidden' : 'block'} space-y-4`}>
           <Card className="p-4 shadow-xl border-none bg-white/95 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
-              <Badge className={vehicle.status==="OFFLINE"
-                ? "bg-gray-200 text-gray-600" 
-                : "bg-green-100 text-green-700"
-                
-              }>● {vehicle.status}</Badge>
-              <span className="text-[10px] text-slate-400 font-medium tracking-tighter uppercase">Updated {vehicle.telemetry.lastUpdate}</span>
+              <Badge className={displayStatus==="OFFLINE"
+                ? "bg-gray-200 text-gray-600"
+                : displayStatus === "ACTIVE"
+                ? "bg-green-100 text-green-700"
+                : "bg-amber-100 text-amber-700"
+              }>
+                {liveData && <span className="animate-pulse mr-1 h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />}
+                ● {displayStatus}
+              </Badge>
+              <span className="text-[10px] text-slate-400 font-medium tracking-tighter uppercase">Updated {lastUpdate}</span>
             </div>
 
             <div className="space-y-4">
@@ -369,11 +538,11 @@ useEffect(() => {
                   <div className="p-2 bg-amber-50 rounded-lg"><Fuel className="h-4 w-4 text-amber-600" /></div>
                   <div>
                     <p className="text-[10px] uppercase font-bold text-slate-400 leading-none mb-1">Fuel Level</p>
-                    <p className="text-lg font-bold text-slate-700 leading-none">{vehicle.telemetry.fuel}%</p>
+                    <p className="text-lg font-bold text-slate-700 leading-none">{currentFuel}%</p>
                   </div>
                 </div>
                 <div className="w-16 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-amber-500 h-full" style={{ width: `${vehicle.telemetry.fuel}%` }}></div>
+                  <div className="bg-amber-500 h-full" style={{ width: `${currentFuel}%` }}></div>
                 </div>
               </div>
 
@@ -382,7 +551,7 @@ useEffect(() => {
                 <div className="p-2 bg-blue-50 rounded-lg"><Gauge className="h-4 w-4 text-blue-600" /></div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400 leading-none mb-1">Current Speed</p>
-                  <p className="text-lg font-bold text-slate-700 leading-none">{vehicle.telemetry.speed} <span className="text-xs font-normal text-slate-400">km/h</span></p>
+                  <p className="text-lg font-bold text-slate-700 leading-none">{currentSpeed} <span className="text-xs font-normal text-slate-400">km/h</span></p>
                 </div>
               </div>
 
@@ -391,7 +560,7 @@ useEffect(() => {
                 <div className="p-2 bg-slate-50 rounded-lg"><Battery className="h-4 w-4 text-slate-600" /></div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-slate-400 leading-none mb-1">Engine Hours</p>
-                  <p className="text-lg font-bold text-slate-700 leading-none">{vehicle.telemetry.engineHours} <span className="text-xs font-normal text-slate-400">hrs</span></p>
+                  <p className="text-lg font-bold text-slate-700 leading-none">{currentEngineHours} <span className="text-xs font-normal text-slate-400">hrs</span></p>
                 </div>
               </div>
             </div>
@@ -409,6 +578,12 @@ useEffect(() => {
                       <span className="flex items-center gap-2"><CalendarIcon className="h-3 w-3 text-amber-400" /> Next Service</span>
                       <span className="text-slate-300">{vehicle.daysToService}</span>
                   </div>
+                  <Link href={`/vehicles/${vehicle.id}/maintenance`}
+                    className="flex items-center justify-between text-xs p-2 bg-amber-600/20 hover:bg-amber-600/30 rounded-lg transition-colors"
+                  >
+                      <span className="flex items-center gap-2"><Wrench className="h-3 w-3 text-amber-400" /> Maintenance</span>
+                      <span className="text-amber-400 font-bold text-[10px]">View →</span>
+                  </Link>
               </div>
           </Card>
         </div>
@@ -416,10 +591,10 @@ useEffect(() => {
 
       {/* THE MAP CONTAINER */}
       <div className="absolute inset-0 z-0">
-          <Map 
-              center={finalPos as [number, number]} 
+          <Map
+              center={finalPos as [number, number]}
               history={mapHistory}
-              status={vehicle.status as DeviceStatus} // Pass the current
+              status={displayStatus}
               playbackIndex={playbackEnabled ? playbackIndex : null}
             />
       </div>

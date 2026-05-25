@@ -1,3 +1,4 @@
+"use server";
 import { redirect } from "next/navigation";
 import { deleteSession } from "@/app/_lib/sessions";
 

@@ -32,13 +32,5 @@ export async function getDashboardStats() {
     })
   ]);
 
-  // Format counts for the UI
-//   const counts = {
-//     TOTAL: vehicleCounts.reduce((acc, curr) => acc + curr._count, 0),
-//     ACTIVE: vehicleCounts.find(c => c.state === 'ACTIVE')?._count || 0,
-//     IDLE: vehicleCounts.find(c => c.state === 'IDLE')?._count || 0,
-//     OFFLINE: vehicleCounts.find(c => c.state === 'OFFLINE')?._count || 0,
-//   };
-
   return { alertsToday, recentAlerts, stats };
 }

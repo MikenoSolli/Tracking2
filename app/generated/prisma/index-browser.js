@@ -120,25 +120,234 @@ exports.Prisma.TransactionIsolationLevel = makeStrictEnum({
   Serializable: 'Serializable'
 });
 
-exports.Prisma.AlertScalarFieldEnum = {
-  id: 'id',
-  vehicleId: 'vehicleId',
-  type: 'type',
-  severity: 'severity',
-  message: 'message',
-  isResolved: 'isResolved',
-  createdAt: 'createdAt',
-  DriverId: 'DriverId'
-};
-
 exports.Prisma.CompaniesScalarFieldEnum = {
   id: 'id',
   name: 'name',
   email: 'email',
   phone: 'phone',
   address: 'address',
+  companyType: 'companyType',
+  serviceType: 'serviceType',
+  isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.UserScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  email: 'email',
+  password: 'password',
+  role: 'role',
+  companyId: 'companyId',
+  isActive: 'isActive',
+  verificationToken: 'verificationToken',
+  verifiedAt: 'verifiedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.VehicleScalarFieldEnum = {
+  id: 'id',
+  Type: 'Type',
+  plateNumber: 'plateNumber',
+  make: 'make',
+  model: 'model',
+  year: 'year',
+  Imei: 'Imei',
+  driverId: 'driverId',
+  capacity: 'capacity',
+  companyId: 'companyId',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.DriverScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  phone: 'phone',
+  licenseNo: 'licenseNo',
+  performance: 'performance',
+  licenceExp: 'licenceExp',
+  companyId: 'companyId',
+  isActive: 'isActive',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.Driver_assignmentScalarFieldEnum = {
+  id: 'id',
+  driverId: 'driverId',
+  vehicleId: 'vehicleId',
+  assignedBy: 'assignedBy',
+  assignedAt: 'assignedAt',
+  unassignedAt: 'unassignedAt',
+  notes: 'notes'
+};
+
+exports.Prisma.Vehicle_accessScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  userId: 'userId',
+  accessType: 'accessType',
+  grantedBy: 'grantedBy',
+  grantedAt: 'grantedAt',
+  expiresAt: 'expiresAt',
+  isActive: 'isActive'
+};
+
+exports.Prisma.StatusScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  latitude: 'latitude',
+  longitude: 'longitude',
+  speed: 'speed',
+  course: 'course',
+  satellites: 'satellites',
+  altitude: 'altitude',
+  distance: 'distance',
+  fuelLevel: 'fuelLevel',
+  engineHours: 'engineHours',
+  engineRPM: 'engineRPM',
+  engineTemp: 'engineTemp',
+  engineLoad: 'engineLoad',
+  oilPressure: 'oilPressure',
+  battVoltage: 'battVoltage',
+  odometer: 'odometer',
+  fuelUsed: 'fuelUsed',
+  state: 'state',
+  locationUpdatedAt: 'locationUpdatedAt',
+  telemetryUpdatedAt: 'telemetryUpdatedAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.Gps_eventsScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  timestamp: 'timestamp',
+  latitude: 'latitude',
+  longitude: 'longitude',
+  speed: 'speed',
+  course: 'course',
+  satellites: 'satellites',
+  altitude: 'altitude',
+  eventType: 'eventType',
+  distanceFromLast: 'distanceFromLast',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.Telemetry_dataScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  timestamp: 'timestamp',
+  engineRPM: 'engineRPM',
+  engineTemp: 'engineTemp',
+  engineLoad: 'engineLoad',
+  engineHours: 'engineHours',
+  fuelLevel: 'fuelLevel',
+  fuelUsed: 'fuelUsed',
+  oilPressure: 'oilPressure',
+  batteryVoltage: 'batteryVoltage',
+  odometer: 'odometer',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.Maintenance_templateScalarFieldEnum = {
+  id: 'id',
+  companyId: 'companyId',
+  name: 'name',
+  description: 'description',
+  vehicleType: 'vehicleType',
+  timeIntervalDays: 'timeIntervalDays',
+  mileageIntervalKm: 'mileageIntervalKm',
+  engineHoursInterval: 'engineHoursInterval',
+  defaultSeverity: 'defaultSeverity',
+  estimatedCost: 'estimatedCost',
+  estimatedDuration: 'estimatedDuration',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MaintenanceScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  mechanicId: 'mechanicId',
+  serviceCompanyId: 'serviceCompanyId',
+  templateId: 'templateId',
+  serviceDate: 'serviceDate',
+  scheduledDate: 'scheduledDate',
+  nextServiceDate: 'nextServiceDate',
+  description: 'description',
+  cost: 'cost',
+  status: 'status',
+  severity: 'severity',
+  origin: 'origin',
+  notes: 'notes',
+  metadata: 'metadata',
+  completedAt: 'completedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.Maintenance_dataScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  fuelRate: 'fuelRate',
+  fuelEff: 'fuelEff',
+  engineHours: 'engineHours',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.Vehicle_faultsScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  maintenanceId: 'maintenanceId',
+  faultCode: 'faultCode',
+  description: 'description',
+  severity: 'severity',
+  detectedAt: 'detectedAt',
+  clearedAt: 'clearedAt',
+  clearedBy: 'clearedBy',
+  isActive: 'isActive'
+};
+
+exports.Prisma.Fault_code_definitionsScalarFieldEnum = {
+  code: 'code',
+  description: 'description',
+  systemType: 'systemType',
+  severity: 'severity',
+  recommendedAction: 'recommendedAction'
+};
+
+exports.Prisma.AlertScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  DriverId: 'DriverId',
+  type: 'type',
+  severity: 'severity',
+  message: 'message',
+  alertCategory: 'alertCategory',
+  isMaintenanceRelated: 'isMaintenanceRelated',
+  assignedMechanicId: 'assignedMechanicId',
+  maintenanceId: 'maintenanceId',
+  faultId: 'faultId',
+  acknowledgedAt: 'acknowledgedAt',
+  acknowledgedBy: 'acknowledgedBy',
+  resolvedAt: 'resolvedAt',
+  isResolved: 'isResolved',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.TripScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  startTime: 'startTime',
+  endTime: 'endTime',
+  distance: 'distance',
+  fuelUsed: 'fuelUsed',
+  startLoc: 'startLoc',
+  endLoc: 'endLoc'
 };
 
 exports.Prisma.DailySummaryScalarFieldEnum = {
@@ -155,92 +364,77 @@ exports.Prisma.DailySummaryScalarFieldEnum = {
   totalDistance: 'totalDistance',
   totalFuelUsed: 'totalFuelUsed',
   totalEngineHrs: 'totalEngineHrs',
-  IdleTime: 'IdleTime',
-  RunningTime: 'RunningTime',
+  idleTime: 'idleTime',
+  runningTime: 'runningTime',
   sampleCount: 'sampleCount',
   updatedAt: 'updatedAt'
 };
 
-exports.Prisma.DriverScalarFieldEnum = {
+exports.Prisma.Audit_logScalarFieldEnum = {
   id: 'id',
-  name: 'name',
-  phone: 'phone',
-  licenseNo: 'licenseNo',
-  performance: 'performance',
-  licenceExp: 'licenceExp',
-  companyId: 'companyId'
+  userId: 'userId',
+  action: 'action',
+  entityType: 'entityType',
+  entityId: 'entityId',
+  oldValue: 'oldValue',
+  newValue: 'newValue',
+  ipAddress: 'ipAddress',
+  timestamp: 'timestamp'
 };
 
-exports.Prisma.MaintenanceScalarFieldEnum = {
+exports.Prisma.Vehicle_subscriptionScalarFieldEnum = {
   id: 'id',
   vehicleId: 'vehicleId',
-  serviceDate: 'serviceDate',
-  nextService: 'nextService',
-  description: 'description',
-  cost: 'cost'
-};
-
-exports.Prisma.Maintenance_dataScalarFieldEnum = {
-  id: 'id',
-  vehicleId: 'vehicleId',
-  fuelRate: 'fuelRate',
-  fuelEff: 'fuelEff',
-  EngineHours: 'EngineHours',
+  subscriptionType: 'subscriptionType',
+  isActive: 'isActive',
+  activatedAt: 'activatedAt',
+  expiresAt: 'expiresAt',
+  createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
 
-exports.Prisma.StatusScalarFieldEnum = {
+exports.Prisma.Vehicle_feature_configScalarFieldEnum = {
   id: 'id',
-  lastLat: 'lastLat',
-  lastLng: 'lastLng',
-  lastSpeed: 'lastSpeed',
-  state: 'state',
-  fuelLevel: 'fuelLevel',
-  engineHours: 'engineHours',
-  lastUpdate: 'lastUpdate',
+  vehicleSubscriptionId: 'vehicleSubscriptionId',
+  featureType: 'featureType',
+  isEnabled: 'isEnabled',
+  config: 'config',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.Custom_sensorScalarFieldEnum = {
+  id: 'id',
+  featureConfigId: 'featureConfigId',
   vehicleId: 'vehicleId',
-  BattVoltage: 'BattVoltage',
-  EngineLoad: 'EngineLoad',
-  OilPressure: 'OilPressure',
-  distance: 'distance',
-  engineRPM: 'engineRPM',
-  engineTemp: 'engineTemp',
-  fuelUsed: 'fuelUsed'
+  sensorName: 'sensorName',
+  sensorType: 'sensorType',
+  unit: 'unit',
+  minValue: 'minValue',
+  maxValue: 'maxValue',
+  alertThreshold: 'alertThreshold',
+  alertCondition: 'alertCondition',
+  isActive: 'isActive',
+  createdAt: 'createdAt'
 };
 
-exports.Prisma.TripScalarFieldEnum = {
+exports.Prisma.Custom_sensor_readingScalarFieldEnum = {
   id: 'id',
+  sensorId: 'sensorId',
   vehicleId: 'vehicleId',
-  startTime: 'startTime',
-  endTime: 'endTime',
-  distance: 'distance',
-  fuelUsed: 'fuelUsed',
-  startLoc: 'startLoc',
-  endLoc: 'endLoc'
+  value: 'value',
+  timestamp: 'timestamp',
+  createdAt: 'createdAt'
 };
 
-exports.Prisma.UserScalarFieldEnum = {
+exports.Prisma.SessionScalarFieldEnum = {
   id: 'id',
-  name: 'name',
-  email: 'email',
-  password: 'password',
-  role: 'role',
-  created_data: 'created_data',
-  updatedAt: 'updatedAt',
-  companyId: 'companyId'
-};
-
-exports.Prisma.VehicleScalarFieldEnum = {
-  id: 'id',
-  Type: 'Type',
-  plateNumber: 'plateNumber',
-  make: 'make',
-  model: 'model',
-  driverId: 'driverId',
-  ownerId: 'ownerId',
-  capacity: 'capacity',
-  companyId: 'companyId',
-  Imei: 'Imei'
+  userId: 'userId',
+  tokenHash: 'tokenHash',
+  userAgent: 'userAgent',
+  ipAddress: 'ipAddress',
+  expiresAt: 'expiresAt',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.SortOrder = {
@@ -248,11 +442,9 @@ exports.Prisma.SortOrder = {
   desc: 'desc'
 };
 
-exports.Prisma.alertOrderByRelevanceFieldEnum = {
-  id: 'id',
-  vehicleId: 'vehicleId',
-  message: 'message',
-  DriverId: 'DriverId'
+exports.Prisma.NullableJsonNullValueInput = {
+  DbNull: Prisma.DbNull,
+  JsonNull: Prisma.JsonNull
 };
 
 exports.Prisma.NullsOrder = {
@@ -267,9 +459,20 @@ exports.Prisma.companiesOrderByRelevanceFieldEnum = {
   address: 'address'
 };
 
-exports.Prisma.dailySummaryOrderByRelevanceFieldEnum = {
+exports.Prisma.userOrderByRelevanceFieldEnum = {
+  name: 'name',
+  email: 'email',
+  password: 'password',
+  verificationToken: 'verificationToken'
+};
+
+exports.Prisma.vehicleOrderByRelevanceFieldEnum = {
   id: 'id',
-  vehicleId: 'vehicleId'
+  plateNumber: 'plateNumber',
+  make: 'make',
+  model: 'model',
+  Imei: 'Imei',
+  driverId: 'driverId'
 };
 
 exports.Prisma.driverOrderByRelevanceFieldEnum = {
@@ -279,10 +482,53 @@ exports.Prisma.driverOrderByRelevanceFieldEnum = {
   licenseNo: 'licenseNo'
 };
 
+exports.Prisma.driver_assignmentOrderByRelevanceFieldEnum = {
+  driverId: 'driverId',
+  vehicleId: 'vehicleId',
+  notes: 'notes'
+};
+
+exports.Prisma.vehicle_accessOrderByRelevanceFieldEnum = {
+  vehicleId: 'vehicleId'
+};
+
+exports.Prisma.statusOrderByRelevanceFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId'
+};
+
+exports.Prisma.gps_eventsOrderByRelevanceFieldEnum = {
+  vehicleId: 'vehicleId',
+  eventType: 'eventType'
+};
+
+exports.Prisma.telemetry_dataOrderByRelevanceFieldEnum = {
+  vehicleId: 'vehicleId'
+};
+
+exports.Prisma.maintenance_templateOrderByRelevanceFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description'
+};
+
+exports.Prisma.JsonNullValueFilter = {
+  DbNull: Prisma.DbNull,
+  JsonNull: Prisma.JsonNull,
+  AnyNull: Prisma.AnyNull
+};
+
+exports.Prisma.QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+};
+
 exports.Prisma.maintenanceOrderByRelevanceFieldEnum = {
   id: 'id',
   vehicleId: 'vehicleId',
-  description: 'description'
+  templateId: 'templateId',
+  description: 'description',
+  notes: 'notes'
 };
 
 exports.Prisma.maintenance_dataOrderByRelevanceFieldEnum = {
@@ -290,9 +536,25 @@ exports.Prisma.maintenance_dataOrderByRelevanceFieldEnum = {
   vehicleId: 'vehicleId'
 };
 
-exports.Prisma.statusOrderByRelevanceFieldEnum = {
+exports.Prisma.vehicle_faultsOrderByRelevanceFieldEnum = {
+  vehicleId: 'vehicleId',
+  maintenanceId: 'maintenanceId',
+  faultCode: 'faultCode',
+  description: 'description'
+};
+
+exports.Prisma.fault_code_definitionsOrderByRelevanceFieldEnum = {
+  code: 'code',
+  description: 'description',
+  recommendedAction: 'recommendedAction'
+};
+
+exports.Prisma.alertOrderByRelevanceFieldEnum = {
   id: 'id',
-  vehicleId: 'vehicleId'
+  vehicleId: 'vehicleId',
+  DriverId: 'DriverId',
+  message: 'message',
+  maintenanceId: 'maintenanceId'
 };
 
 exports.Prisma.tripOrderByRelevanceFieldEnum = {
@@ -302,33 +564,80 @@ exports.Prisma.tripOrderByRelevanceFieldEnum = {
   endLoc: 'endLoc'
 };
 
-exports.Prisma.userOrderByRelevanceFieldEnum = {
-  name: 'name',
-  email: 'email',
-  password: 'password'
-};
-
-exports.Prisma.vehicleOrderByRelevanceFieldEnum = {
+exports.Prisma.dailySummaryOrderByRelevanceFieldEnum = {
   id: 'id',
-  plateNumber: 'plateNumber',
-  make: 'make',
-  model: 'model',
-  driverId: 'driverId',
-  Imei: 'Imei'
-};
-exports.alert_type = exports.$Enums.alert_type = {
-  SPEEDING: 'SPEEDING',
-  GEOFENCE_EXIT: 'GEOFENCE_EXIT',
-  LOW_FUEL: 'LOW_FUEL',
-  MAINTENANCE_DUE: 'MAINTENANCE_DUE',
-  FAULT: 'FAULT',
-  STOP: 'STOP'
+  vehicleId: 'vehicleId'
 };
 
-exports.alert_severity = exports.$Enums.alert_severity = {
-  LOW: 'LOW',
-  MEDIUM: 'MEDIUM',
-  HIGH: 'HIGH'
+exports.Prisma.audit_logOrderByRelevanceFieldEnum = {
+  action: 'action',
+  entityType: 'entityType',
+  entityId: 'entityId',
+  oldValue: 'oldValue',
+  newValue: 'newValue',
+  ipAddress: 'ipAddress'
+};
+
+exports.Prisma.vehicle_subscriptionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId'
+};
+
+exports.Prisma.vehicle_feature_configOrderByRelevanceFieldEnum = {
+  id: 'id',
+  vehicleSubscriptionId: 'vehicleSubscriptionId'
+};
+
+exports.Prisma.custom_sensorOrderByRelevanceFieldEnum = {
+  id: 'id',
+  featureConfigId: 'featureConfigId',
+  vehicleId: 'vehicleId',
+  sensorName: 'sensorName',
+  unit: 'unit'
+};
+
+exports.Prisma.custom_sensor_readingOrderByRelevanceFieldEnum = {
+  sensorId: 'sensorId',
+  vehicleId: 'vehicleId'
+};
+
+exports.Prisma.sessionOrderByRelevanceFieldEnum = {
+  id: 'id',
+  tokenHash: 'tokenHash',
+  userAgent: 'userAgent',
+  ipAddress: 'ipAddress'
+};
+exports.company_type = exports.$Enums.company_type = {
+  INDIVIDUAL: 'INDIVIDUAL',
+  COMPANY: 'COMPANY'
+};
+
+exports.service_type = exports.$Enums.service_type = {
+  FLEET: 'FLEET',
+  MECHANIC: 'MECHANIC'
+};
+
+exports.users_role = exports.$Enums.users_role = {
+  USER: 'USER',
+  ADMIN: 'ADMIN',
+  MECHANIC: 'MECHANIC',
+  OWNER: 'OWNER'
+};
+
+exports.vehicle_Type = exports.$Enums.vehicle_Type = {
+  TRACTOR: 'TRACTOR',
+  TRUCK: 'TRUCK',
+  CAR: 'CAR',
+  BUS: 'BUS',
+  MOTORCYCLE: 'MOTORCYCLE',
+  VAN: 'VAN',
+  PICKUP: 'PICKUP'
+};
+
+exports.access_type = exports.$Enums.access_type = {
+  FULL: 'FULL',
+  MAINTENANCE_ONLY: 'MAINTENANCE_ONLY',
+  VIEW_ONLY: 'VIEW_ONLY'
 };
 
 exports.status_state = exports.$Enums.status_state = {
@@ -337,30 +646,157 @@ exports.status_state = exports.$Enums.status_state = {
   OFFLINE: 'OFFLINE'
 };
 
-exports.users_role = exports.$Enums.users_role = {
-  USER: 'USER',
-  ADMIN: 'ADMIN'
+exports.maintenance_severity = exports.$Enums.maintenance_severity = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL'
 };
 
-exports.vehicle_Type = exports.$Enums.vehicle_Type = {
-  TRACTOR: 'TRACTOR',
-  TRUCK: 'TRUCK',
-  CAR: 'CAR',
-  BUS: 'BUS',
-  MOTORCYCLE: 'MOTORCYCLE'
+exports.maintenance_status = exports.$Enums.maintenance_status = {
+  SCHEDULED: 'SCHEDULED',
+  ASSIGNED: 'ASSIGNED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  PENDING_PARTS: 'PENDING_PARTS',
+  ON_HOLD: 'ON_HOLD',
+  COMPLETED: 'COMPLETED',
+  APPROVED: 'APPROVED',
+  CANCELLED: 'CANCELLED',
+  ESCALATED: 'ESCALATED'
+};
+
+exports.maintenance_origin = exports.$Enums.maintenance_origin = {
+  INTERVAL: 'INTERVAL',
+  FAULT: 'FAULT',
+  MANUAL: 'MANUAL',
+  DRIVER: 'DRIVER'
+};
+
+exports.fault_severity = exports.$Enums.fault_severity = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL'
+};
+
+exports.fault_system = exports.$Enums.fault_system = {
+  ENGINE: 'ENGINE',
+  TRANSMISSION: 'TRANSMISSION',
+  ABS: 'ABS',
+  AIRBAG: 'AIRBAG',
+  EMISSION: 'EMISSION',
+  ELECTRICAL: 'ELECTRICAL',
+  FUEL: 'FUEL',
+  COOLING: 'COOLING',
+  OTHER: 'OTHER'
+};
+
+exports.alert_type = exports.$Enums.alert_type = {
+  SPEEDING: 'SPEEDING',
+  GEOFENCE_EXIT: 'GEOFENCE_EXIT',
+  GEOFENCE_ENTER: 'GEOFENCE_ENTER',
+  LOW_FUEL: 'LOW_FUEL',
+  MAINTENANCE_DUE: 'MAINTENANCE_DUE',
+  FAULT: 'FAULT',
+  STOP: 'STOP',
+  HARSH_BRAKING: 'HARSH_BRAKING',
+  HARSH_ACCELERATION: 'HARSH_ACCELERATION',
+  OVERSPEED: 'OVERSPEED',
+  ENGINE_OVERHEAT: 'ENGINE_OVERHEAT',
+  LOW_BATTERY: 'LOW_BATTERY',
+  MECHANICAL_FAULT: 'MECHANICAL_FAULT'
+};
+
+exports.alert_severity = exports.$Enums.alert_severity = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL'
+};
+
+exports.alert_category = exports.$Enums.alert_category = {
+  GEOFENCE: 'GEOFENCE',
+  SPEED: 'SPEED',
+  MAINTENANCE: 'MAINTENANCE',
+  MECHANICAL: 'MECHANICAL',
+  FUEL: 'FUEL',
+  BATTERY: 'BATTERY',
+  ENGINE: 'ENGINE',
+  SECURITY: 'SECURITY',
+  OTHER: 'OTHER'
+};
+
+exports.subscription_type = exports.$Enums.subscription_type = {
+  BASIC: 'BASIC',
+  STANDARD: 'STANDARD',
+  ADVANCED: 'ADVANCED',
+  CUSTOM: 'CUSTOM',
+  ENTERPRISE: 'ENTERPRISE'
+};
+
+exports.feature_type = exports.$Enums.feature_type = {
+  GPS_TRACKING: 'GPS_TRACKING',
+  SPEED_MONITORING: 'SPEED_MONITORING',
+  FUEL_MONITORING: 'FUEL_MONITORING',
+  ENGINE_TELEMETRY: 'ENGINE_TELEMETRY',
+  OBD_DIAGNOSTICS: 'OBD_DIAGNOSTICS',
+  GEOFENCING: 'GEOFENCING',
+  DRIVER_BEHAVIOR: 'DRIVER_BEHAVIOR',
+  MAINTENANCE_TRACKING: 'MAINTENANCE_TRACKING',
+  CUSTOM_SENSORS: 'CUSTOM_SENSORS',
+  TEMPERATURE_MONITORING: 'TEMPERATURE_MONITORING',
+  HUMIDITY_MONITORING: 'HUMIDITY_MONITORING',
+  CARGO_MONITORING: 'CARGO_MONITORING',
+  REFRIGERATION: 'REFRIGERATION',
+  TIRE_PRESSURE: 'TIRE_PRESSURE',
+  WEIGHT_SENSOR: 'WEIGHT_SENSOR',
+  VIDEO_TELEMATICS: 'VIDEO_TELEMATICS'
+};
+
+exports.custom_sensor_type = exports.$Enums.custom_sensor_type = {
+  TEMPERATURE: 'TEMPERATURE',
+  PRESSURE: 'PRESSURE',
+  HUMIDITY: 'HUMIDITY',
+  WEIGHT: 'WEIGHT',
+  VOLUME: 'VOLUME',
+  DISTANCE: 'DISTANCE',
+  BINARY: 'BINARY',
+  COUNTER: 'COUNTER',
+  OTHER: 'OTHER'
+};
+
+exports.alert_condition = exports.$Enums.alert_condition = {
+  ABOVE: 'ABOVE',
+  BELOW: 'BELOW',
+  EQUALS: 'EQUALS',
+  BETWEEN: 'BETWEEN',
+  OUTSIDE: 'OUTSIDE'
 };
 
 exports.Prisma.ModelName = {
-  alert: 'alert',
   companies: 'companies',
-  dailySummary: 'dailySummary',
+  user: 'user',
+  vehicle: 'vehicle',
   driver: 'driver',
+  driver_assignment: 'driver_assignment',
+  vehicle_access: 'vehicle_access',
+  status: 'status',
+  gps_events: 'gps_events',
+  telemetry_data: 'telemetry_data',
+  maintenance_template: 'maintenance_template',
   maintenance: 'maintenance',
   maintenance_data: 'maintenance_data',
-  status: 'status',
+  vehicle_faults: 'vehicle_faults',
+  fault_code_definitions: 'fault_code_definitions',
+  alert: 'alert',
   trip: 'trip',
-  user: 'user',
-  vehicle: 'vehicle'
+  dailySummary: 'dailySummary',
+  audit_log: 'audit_log',
+  vehicle_subscription: 'vehicle_subscription',
+  vehicle_feature_config: 'vehicle_feature_config',
+  custom_sensor: 'custom_sensor',
+  custom_sensor_reading: 'custom_sensor_reading',
+  session: 'session'
 };
 
 /**

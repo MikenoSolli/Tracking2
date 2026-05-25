@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { startOfDay, endOfDay, isSameDay } from "date-fns";
+import { startOfDay, endOfDay } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
@@ -9,44 +9,38 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-
     const { id } = await params;
 
     const { searchParams } = new URL(req.url);
     const fromStr = searchParams.get("from");
     const toStr = searchParams.get("to");
 
-    // 1. Validation
     if (!fromStr || !toStr) {
       return NextResponse.json({ error: "Missing date range" }, { status: 400 });
     }
 
-    // 2. Fetch data from the Status table
-    // Adjust 'vehicleId' and 'lastUpdate' to match your exact Prisma schema names
     const from = new Date(fromStr);
     const to = new Date(toStr);
 
-    const isSingleDay = isSameDay(from, to);
-
-    const history = await prisma.status.findMany({
+    // Fetch from gps_events — use endOfDay on `to` so a single-day selection
+    // covers the full day, not just midnight
+    const history = await prisma.gps_events.findMany({
       where: {
         vehicleId: id,
-        lastUpdate: {
-          gte: startOfDay((from)),
-          lte: endOfDay((to)),
+        timestamp: {
+          gte: startOfDay(from),
+          lte: endOfDay(to),
         },
       },
-      orderBy: { lastUpdate: "asc" },
-      // Optional: limit to 1000 points to keep the map performant
-      take:100,
+      orderBy: { timestamp: "asc" },
+      take: 100,
     });
 
-    // 3. Format the data for the Leaflet Map
     const formattedHistory = history
-      .filter(s => s.lastLat !== null && s.lastLng !== null)
-      .map(s => ({
-        pos: [s.lastLat as number, s.lastLng as number] as [number, number],
-        time: s.lastUpdate.toISOString(),
+      .filter(e => e.latitude !== null && e.longitude !== null)
+      .map(e => ({
+        pos: [e.latitude, e.longitude] as [number, number],
+        time: e.timestamp.toISOString(),
       }));
 
     return NextResponse.json(formattedHistory, {

@@ -1,238 +1,287 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { 
-  startOfDay, endOfDay, startOfWeek, endOfWeek, 
+import {
+  startOfDay, endOfDay, startOfWeek, endOfWeek,
   startOfMonth, endOfMonth, startOfYear, endOfYear,
-  eachHourOfInterval, eachDayOfInterval, eachMonthOfInterval,
+  eachDayOfInterval, eachMonthOfInterval,
   format, isSameDay, isSameMonth
 } from "date-fns";
 import { getSession } from "@/app/_lib/sessions";
 
-export const dynamic = 'force-dynamic';
+// ─── Cache ─────────────────────────────────────────────────────────
+const CACHE_TTL = 5 * 60 * 1000;
+const reportCache = new Map<string, { data: unknown; timestamp: number }>();
+
+function getCached<T>(key: string): T | null {
+  const entry = reportCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL) { reportCache.delete(key); return null; }
+  return entry.data as T;
+}
+function setCache(key: string, data: unknown) {
+  reportCache.set(key, { data, timestamp: Date.now() });
+}
+
+// ─── Response Type ─────────────────────────────────────────────────
+interface ReportVehicleMetric {
+  id: string; plate: string; type: string; make: string; model: string;
+  distance: number; fuel: number; runningTime: number; idleTime: number;
+  utilization: number; avgSpeed: number;
+}
+interface ReportResponse {
+  period: { range: string; start: string; end: string };
+  fleet: {
+    total: number; active: number; idle: number; offline: number;
+    typeBreakdown: { type: string; count: number }[];
+  };
+  stats: {
+    distance: number; fuel: number; engineHours: number;
+    runningTime: number; idleTime: number;
+    utilization: number; avgSpeed: number; fuelEfficiency: number;
+  };
+  chartData: { name: string; distance: number; fuel: number; hours: number }[];
+  vehicles: ReportVehicleMetric[];
+  topVehicles: { id: string; name: string; plate: string; distance: number }[];
+  alerts: { id: string; vehicle: string; type: string; severity: string; message: string; time: string }[];
+  maintenance: { id: string; vehicle: string; description: string; status: string; scheduledDate: string }[];
+}
+
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const dateParam = searchParams.get('date') || new Date().toISOString();
-    const range = searchParams.get('range') || 'daily'; 
+    const dateParam = searchParams.get("date") || new Date().toISOString();
+    const range = searchParams.get("range") || "daily";
     const targetDate = new Date(dateParam);
 
-    console.log('General Report - Date:', dateParam, 'Range:', range, 'Target:', targetDate);
-
+    // Session — single source of truth
     const session = await getSession();
-    console.log('Session:', session);
-    console.log('Session userId type:', typeof session?.userId, session?.userId);
-    const userId = Number(session?.userId);
-
+    const userId = Number(session?.sub);
     if (!userId) {
-      console.log('No userId found in session');
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get user's companyId
+    // Cache check
+    const cacheKey = `report_general_${userId}_${dateParam}_${range}`;
+    const cached = getCached<ReportResponse>(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
+    // Company check
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { companyId: true }
+      select: { companyId: true },
     });
-
     if (!user?.companyId) {
-      return NextResponse.json({ error: 'User has no company' }, { status: 403 });
+      return NextResponse.json({ error: "User has no company" }, { status: 403 });
     }
 
-    console.log('UserID (parsed):', userId, 'type:', typeof userId, 'companyId:', user.companyId);
-
-    // 1. --- GET USER'S VEHICLES ---
-    console.log('Fetching vehicles for companyId:', user.companyId);
-    
-    // Get vehicles belonging to the user's company
-    const userVehicles = await prisma.vehicle.findMany({
-      where: { companyId: user.companyId },
-      select: { id: true, plateNumber: true, Type: true }
+    // ─── Vehicles ──────────────────────────────────────────────
+    const vehicles = await prisma.vehicle.findMany({
+      where: { companyId: user.companyId, isActive: true },
+      select: { id: true, plateNumber: true, Type: true, make: true, model: true },
     });
-    console.log('User vehicles found:', userVehicles.length, JSON.stringify(userVehicles));
-    const vehicleIds = userVehicles.map(v => v.id);
+    const vehicleIds = vehicles.map((v) => v.id);
 
-    // If user has no vehicles, return empty data structure early
     if (vehicleIds.length === 0) {
-      console.log('No vehicles found for user');
-      return NextResponse.json({
-        stats: { distance: '0.0 km', fuel: '0.0 L', hours: '0.0 hrs', alerts: '00' },
+      const empty: ReportResponse = {
+        period: { range, start: "", end: "" },
+        fleet: { total: 0, active: 0, idle: 0, offline: 0, typeBreakdown: [] },
+        stats: { distance: 0, fuel: 0, engineHours: 0, runningTime: 0, idleTime: 0, utilization: 0, avgSpeed: 0, fuelEfficiency: 0 },
         chartData: [],
-        typeCounts: [],
-        alerts: []
-      });
+        vehicles: [],
+        topVehicles: [],
+        alerts: [],
+        maintenance: [],
+      };
+      return NextResponse.json(empty);
     }
 
-    let start: Date, end: Date, intervals: Date[], formatStr: string;
-
-    // 2. --- DEFINE WINDOWS ---
-    console.log('Defining window for range:', range, 'targetDate:', targetDate);
+    // ─── Date Windows ──────────────────────────────────────────
+    let start: Date, end: Date, intervals: Date[], fmt: string;
     switch (range) {
       case "weekly":
         start = startOfWeek(targetDate);
         end = endOfWeek(targetDate);
         intervals = eachDayOfInterval({ start, end });
-        formatStr = "EEE"; 
+        fmt = "EEE";
         break;
       case "monthly":
         start = startOfMonth(targetDate);
         end = endOfMonth(targetDate);
         intervals = eachDayOfInterval({ start, end });
-        formatStr = "dd MMM"; 
+        fmt = "dd MMM";
         break;
       case "yearly":
         start = startOfYear(targetDate);
         end = endOfYear(targetDate);
         intervals = eachMonthOfInterval({ start, end });
-        formatStr = "MMM"; 
+        fmt = "MMM";
         break;
-      default:
+      default: // daily
         start = startOfDay(targetDate);
         end = endOfDay(targetDate);
-        intervals = eachHourOfInterval({ start, end });
-        formatStr = "HH:00";
+        intervals = eachDayOfInterval({ start, end });
+        fmt = "EEE";
     }
 
-    let chartData = [];
-    let summaryStats = { distance: 0, fuel: 0, hours: 0 };
+    // ─── Fleet Status Counts ──────────────────────────────────
+    const latestStatuses = await prisma.status.findMany({
+      where: { vehicleId: { in: vehicleIds } },
+      orderBy: { updatedAt: "desc" },
+      take: vehicleIds.length,
+    });
+    const statusByVehicle = new Map(latestStatuses.map((s) => [s.vehicleId, s]));
+    let active = 0, idle = 0, offline = 0;
+    vehicles.forEach((v) => {
+      const s = statusByVehicle.get(v.id);
+      if (!s || s.state === "OFFLINE") offline++;
+      else if (s.state === "ACTIVE") active++;
+      else if (s.state === "IDLE") idle++;
+    });
 
-    // 3. --- DATA FETCHING (HYBRID + USER FILTER) ---
-    if (range === "daily") {
-      const logs = await prisma.status.findMany({
-        where: { 
-          vehicleId: { in: vehicleIds }, // USER FILTER
-          lastUpdate: { gte: start, lte: end } 
-        },
-        select: { lastUpdate: true, distance: true, fuelUsed: true, engineHours: true, vehicleId: true },
-        orderBy: { lastUpdate: 'asc' }
+    // ─── Type Breakdown ────────────────────────────────────────
+    const typeBreakdown = await prisma.vehicle.groupBy({
+      where: { companyId: user.companyId, isActive: true },
+      by: ["Type"],
+      _count: { id: true },
+    });
+
+    // ─── Summaries for the period ──────────────────────────────
+    const summaries = await prisma.dailySummary.findMany({
+      where: {
+        vehicleId: { in: vehicleIds },
+        date: { gte: start, lte: end },
+      },
+    });
+
+    // ─── Chart Data ────────────────────────────────────────────
+    const chartData = intervals.map((ivStart) => {
+      const ivEnd =
+        range === "yearly"
+          ? new Date(ivStart.getFullYear(), ivStart.getMonth() + 1, 0, 23, 59, 59)
+          : new Date(ivStart.getTime() + 86400000);
+
+      const bucket = summaries.filter((s) => {
+        if (range === "yearly") return isSameMonth(s.date, ivStart);
+        return s.date >= ivStart && s.date < ivEnd;
       });
 
-      // Calculate User Fleet Hours
-      const vehicleMap = new Map<string, { first: number, last: number }>();
-      logs.forEach(log => {
-        if (log.engineHours === null) return;
-        if (!vehicleMap.has(log.vehicleId)) {
-          vehicleMap.set(log.vehicleId, { first: log.engineHours, last: log.engineHours });
-        } else {
-          vehicleMap.get(log.vehicleId)!.last = log.engineHours;
-        }
-      });
-      vehicleMap.forEach(v => { if (v.last - v.first > 0) summaryStats.hours += (v.last - v.first); });
+      return {
+        name: format(ivStart, fmt),
+        distance: bucket.reduce((a, s) => a + s.totalDistance, 0),
+        fuel: bucket.reduce((a, s) => a + s.totalFuelUsed, 0),
+        hours: bucket.reduce((a, s) => a + s.runningTime + s.idleTime, 0),
+      };
+    });
 
-      chartData = intervals.map((intervalStart) => {
-        const intervalEnd = new Date(intervalStart.getTime() + 3600000);
-        const filtered = logs.filter(l => l.lastUpdate >= intervalStart && l.lastUpdate < intervalEnd);
-        return {
-          name: format(intervalStart, formatStr),
-          dist: filtered.reduce((acc, curr) => acc + (curr.distance || 0), 0),
-          fuel: filtered.reduce((acc, curr) => acc + (curr.fuelUsed || 0), 0)
-        };
-      });
+    // ─── Aggregate Stats ───────────────────────────────────────
+    const totalDistance = summaries.reduce((a, s) => a + s.totalDistance, 0);
+    const totalFuel = summaries.reduce((a, s) => a + s.totalFuelUsed, 0);
+    const totalRunning = summaries.reduce((a, s) => a + s.runningTime, 0);
+    const totalIdle = summaries.reduce((a, s) => a + s.idleTime, 0);
+    const totalEngineHrs = summaries.reduce((a, s) => a + s.totalEngineHrs, 0);
+    const totalTime = totalRunning + totalIdle || 1;
+    const utilization = Math.round((totalRunning / totalTime) * 100);
+    const avgSpeed = totalRunning > 0 ? totalDistance / totalRunning : 0;
+    const fuelEfficiency = totalFuel > 0 ? totalDistance / totalFuel : 0;
 
-      summaryStats.distance = logs.reduce((acc, curr) => acc + (curr.distance || 0), 0);
-      summaryStats.fuel = logs.reduce((acc, curr) => acc + (curr.fuelUsed || 0), 0);
+    // ─── Per-Vehicle Breakdown ─────────────────────────────────
+    const vehicleMetrics: ReportVehicleMetric[] = vehicles.map((v) => {
+      const vs = summaries.filter((s) => s.vehicleId === v.id);
+      const d = vs.reduce((a, s) => a + s.totalDistance, 0);
+      const f = vs.reduce((a, s) => a + s.totalFuelUsed, 0);
+      const rt = vs.reduce((a, s) => a + s.runningTime, 0);
+      const it = vs.reduce((a, s) => a + s.idleTime, 0);
+      const tt = rt + it || 1;
+      return {
+        id: v.id,
+        plate: v.plateNumber || "N/A",
+        type: v.Type,
+        make: v.make || "",
+        model: v.model || "",
+        distance: Math.round(d * 100) / 100,
+        fuel: Math.round(f * 100) / 100,
+        runningTime: Math.round(rt * 100) / 100,
+        idleTime: Math.round(it * 100) / 100,
+        utilization: Math.round((rt / tt) * 100),
+        avgSpeed: rt > 0 ? Math.round((d / rt) * 100) / 100 : 0,
+      };
+    });
 
-} else {
-      console.log('Fetching daily summaries for vehicleIds:', vehicleIds, 'date range:', start.toISOString(), 'to', end.toISOString());
-      const summaries = await prisma.dailySummary.findMany({
-        where: { 
-          vehicleId: { in: vehicleIds }, // USER FILTER
-          date: { gte: start, lte: end } 
-        }
-      });
-      console.log('Daily summaries found:', summaries.length);
-      
-      // Debug: Check if ANY summaries exist for these vehicles (regardless of date)
-      if (summaries.length === 0) {
-        const anySummaries = await prisma.dailySummary.findMany({
-          where: { vehicleId: { in: vehicleIds } },
-          select: { date: true, totalDistance: true, vehicleId: true },
-          take: 10
-        });
-        console.log('ANY summaries for these vehicles (any date):', anySummaries);
-      }
-      
-      if (summaries.length > 0) {
-        console.log('Sample summary dates:', summaries.slice(0, 3).map(s => ({ date: s.date, vehicleId: s.vehicleId, totalDistance: s.totalDistance })));
-      }
+    // ─── Top Vehicles ──────────────────────────────────────────
+    const topVehicles = vehicleMetrics
+      .filter((v) => v.distance > 0)
+      .sort((a, b) => b.distance - a.distance)
+      .slice(0, 5)
+      .map((v) => ({ id: v.id, name: v.make && v.model ? `${v.make} ${v.model}` : v.plate, plate: v.plate, distance: v.distance }));
 
-      chartData = intervals.map((intervalStart) => {
-        let filtered = (range === 'yearly')
-          ? summaries.filter(s => isSameMonth(s.date, intervalStart))
-          : summaries.filter(s => isSameDay(s.date, intervalStart));
+    // ─── Alerts ────────────────────────────────────────────────
+    const alertRecords = await prisma.alert.findMany({
+      where: {
+        vehicleId: { in: vehicleIds },
+        createdAt: { gte: start, lte: end },
+      },
+      include: { vehicle: { select: { plateNumber: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
 
-        return {
-          name: format(intervalStart, formatStr),
-          dist: filtered.reduce((acc, curr) => acc + curr.totalDistance, 0),
-          fuel: filtered.reduce((acc, curr) => acc + curr.totalFuelUsed, 0)
-        };
-      });
+    // ─── Maintenance ───────────────────────────────────────────
+    const maintRecords = await prisma.maintenance.findMany({
+      where: {
+        vehicleId: { in: vehicleIds },
+        scheduledDate: { gte: start, lte: end },
+      },
+      include: { vehicle: { select: { plateNumber: true } } },
+      orderBy: { scheduledDate: "asc" },
+      take: 10,
+    });
 
-      summaryStats.distance = summaries.reduce((acc, curr) => acc + curr.totalDistance, 0);
-      summaryStats.fuel = summaries.reduce((acc, curr) => acc + curr.totalFuelUsed, 0);
-      summaryStats.hours = summaries.reduce((acc, curr) => acc + (curr.RunningTime + curr.IdleTime), 0);
-    }
-
-console.log('Final chartData:', JSON.stringify(chartData));
-    console.log('Summary stats:', summaryStats);
-
-// 4. --- FETCH METADATA ---
-    console.log('Fetching alerts and type counts...');
-    const [alertRecords, typeCounts] = await Promise.all([
-      prisma.alert.findMany({
-        where: { 
-          vehicleId: { in: vehicleIds }, // USER FILTER
-          createdAt: { gte: start, lte: end } 
-        },
-        include: { vehicle: true },
-        orderBy: { createdAt: 'desc' },
-        take: 8
-      }),
-      prisma.vehicle.groupBy({
-        where: { companyId: user.companyId }, // USER FILTER
-        by: ['Type'],
-        _count: { id: true }
-      })
-    ]);
-    
-    // Debug: check for alerts in date range
-    console.log('Alert records found in range:', alertRecords.length);
-    if (alertRecords.length === 0) {
-      const anyAlerts = await prisma.alert.findMany({
-        where: { vehicleId: { in: vehicleIds } },
-        select: { id: true, type: true, severity: true, createdAt: true },
-        take: 5
-      });
-      console.log('ANY alerts for these vehicles:', anyAlerts);
-    }
-    console.log('Type counts:', typeCounts);
-
-    return NextResponse.json({
+    // ─── Build Response ────────────────────────────────────────
+    const response: ReportResponse = {
+      period: { range, start: start.toISOString(), end: end.toISOString() },
+      fleet: {
+        total: vehicles.length,
+        active,
+        idle,
+        offline,
+        typeBreakdown: typeBreakdown.map((t) => ({ type: t.Type, count: t._count.id })),
+      },
       stats: {
-        distance: `${summaryStats.distance.toFixed(1)} km`,
-        fuel: `${summaryStats.fuel.toFixed(1)} L`,
-        hours: `${summaryStats.hours.toFixed(1)} hrs`,
-        alerts: alertRecords.length.toString().padStart(2, '0')
+        distance: Math.round(totalDistance * 100) / 100,
+        fuel: Math.round(totalFuel * 100) / 100,
+        engineHours: Math.round(totalEngineHrs * 100) / 100,
+        runningTime: Math.round(totalRunning * 100) / 100,
+        idleTime: Math.round(totalIdle * 100) / 100,
+        utilization,
+        avgSpeed: Math.round(avgSpeed * 100) / 100,
+        fuelEfficiency: Math.round(fuelEfficiency * 100) / 100,
       },
       chartData,
-      typeCounts: typeCounts.map(tc => ({
-        label: `${tc.Type}s Active`,
-        link: `/reports/${tc.Type?.toLowerCase() || 'units'}s`,
-        value: `${tc._count.id} Units`, 
-        type: tc.Type
-      })),
-      alerts: alertRecords.map(a => ({
+      vehicles: vehicleMetrics.filter((v) => v.distance > 0 || v.runningTime > 0),
+      topVehicles,
+      alerts: alertRecords.map((a) => ({
         id: a.id,
         vehicle: a.vehicle?.plateNumber || "Unknown",
         type: a.type,
-        location: "Main Route", 
-        time: format(a.createdAt, "hh:mm a"),
-        status: a.severity === "HIGH" ? "Critical" : "Warning"
-      }))
-    });
+        severity: a.severity,
+        message: a.message,
+        time: a.createdAt.toISOString(),
+      })),
+      maintenance: maintRecords.map((m) => ({
+        id: m.id,
+        vehicle: m.vehicle?.plateNumber || "Unknown",
+        description: m.description,
+        status: m.status,
+        scheduledDate: m.scheduledDate.toISOString(),
+      })),
+    };
 
+    setCache(cacheKey, response);
+    return NextResponse.json(response);
   } catch (error) {
-    console.error("User Report Error:", error);
+    console.error("General Report Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
